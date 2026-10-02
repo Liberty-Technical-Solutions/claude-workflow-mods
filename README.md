@@ -2,6 +2,44 @@
 
 Six small mods for Claude Code (early-access "function hook" plugins). They add bands above the prompt, a status-line entry, a `/where` command and one prompt rewrite. None of them contain secrets or account data.
 
+## Quick install (everything, one step)
+
+In Claude Code:
+
+```
+/plugin marketplace add Liberty-Technical-Solutions/claude-workflow-mods
+/plugin install all-mods@workflow-mods
+```
+
+Then start a **new** session. That is the whole install: `all-mods` loads all six mods.
+
+**For a whole team, commit this to the repo's `.claude/settings.json`** (or put it in `~/.claude/settings.json` to apply everywhere). Teammates are then prompted to add the marketplace and enable the bundle the first time they open the repo:
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "workflow-mods": { "source": { "source": "github", "repo": "Liberty-Technical-Solutions/claude-workflow-mods" } }
+  },
+  "enabledPlugins": { "all-mods@workflow-mods": true }
+}
+```
+
+> Marketplace loading of function-hook mods is still unverified on our side. If `/where` is missing after a new session starts, use the setup script below instead.
+
+**Without the marketplace** (clone this repo, then):
+
+```powershell
+.\setup.ps1              # Windows: installs the all-mods bundle
+```
+```bash
+./setup.sh               # macOS/Linux: installs the all-mods bundle
+```
+The scripts edit `~/.claude/settings.json` (backup: `settings.json.bak-before-mods`), keep your other plugin folders, and accept `-Remove` / `--remove` to undo. Add `-Individual` / `--individual` to install the six mods as separate plugins instead. Paths are absolute, so re-run the script if you move the folder.
+
+**Install the bundle OR the individual mods, never both**, or every mod loads twice.
+
+## The mods
+
 | Mod | What it does | Uses tokens? |
 |---|---|---|
 | `ship-it` | A bare "deploy it" / "ship it" / "merge it" gets the full commit-PR-merge-deploy-verify checklist attached (hidden context) | A few hundred extra tokens on those prompts only |
@@ -13,47 +51,8 @@ Six small mods for Claude Code (early-access "function hook" plugins). They add 
 
 ## Requirements
 
-- A Claude Code build with function-hook mods enabled (`claude plugin validate` must know the `hooks.json` `modules` form). An organization policy can disable this.
+- A Claude Code build with function-hook mods enabled (`claude plugin validate` must understand the `hooks.json` `modules` form). An organization policy can disable this.
 - `git` on PATH for `where-are-we`, `deploy-verifier`, `close-out-check`; the GitHub CLI (`gh`) for CI and PR status.
-
-## Install (one of)
-
-**A. Setup script** (edits `~/.claude/settings.json`, keeps a `.bak-before-mods` backup, keeps your other plugin folders):
-
-```powershell
-.\setup.ps1            # Windows; add -Remove to uninstall
-```
-```bash
-./setup.sh             # macOS/Linux; add --remove to uninstall
-```
-
-**B. By hand.** Add to `~/.claude/settings.json`, using absolute paths on that machine, `;` separated on Windows and `:` on macOS/Linux:
-
-```json
-{ "env": { "CLAUDE_CODE_PLUGIN_DIRS": "/path/to/claude-mods-pack/plugins/ship-it;/path/to/claude-mods-pack/plugins/cache-keeper" } }
-```
-
-**C. One session only:** `claude --plugin-dir ./plugins/ship-it --plugin-dir ./plugins/cache-keeper`
-
-Then start a **new** session. Move the folder and re-run the script; the paths are absolute.
-
-**D. Marketplace (for teams; install path not yet verified).** This repo is a Claude Code plugin marketplace named `workflow-mods`. In a Claude Code session:
-
-```
-/plugin marketplace add Liberty-Technical-Solutions/claude-workflow-mods
-/plugin install cache-keeper@workflow-mods
-```
-Repeat the second line for each mod you want (`ship-it`, `deploy-verifier`, `where-are-we`, `close-out-check`, `usage-guard`, `cache-keeper`), then start a new session. To have every teammate prompted automatically, add this to the project's `.claude/settings.json`:
-
-```json
-{
-  "extraKnownMarketplaces": {
-    "workflow-mods": { "source": { "source": "github", "repo": "Liberty-Technical-Solutions/claude-workflow-mods" } }
-  },
-  "enabledPlugins": { "cache-keeper@workflow-mods": true, "where-are-we@workflow-mods": true }
-}
-```
-Whether a marketplace install loads these function-hook mods (rather than only command-hook plugins) has not been verified. If a mod does not appear after install, use option A (the setup script) instead and open an issue.
 
 ## Optional per-repo files (commit them with the repo)
 
@@ -64,6 +63,10 @@ Whether a marketplace install loads these function-hook mods (rather than only c
 
 - `ship-it` relies on the repo documenting its deploy steps; if none exist it tells Claude to stop and ask.
 - `where-are-we` runs `git fetch` and probes a few localhost ports at session start.
-- `cache-keeper` assumes a 60-minute cache TTL; flip the **TTL** button to 5m if your plan differs. Auto is off by default.
+- `cache-keeper` assumes a 60-minute cache lifetime; use its **Cache lifetime** button to switch to 5m if your plan differs. Auto is off by default.
 - `usage-guard` can warn and block but cannot show a confirm dialog.
 - If a mod fails to load, the session transcript shows a dim line naming the hook and the reason (`claude --debug` has more).
+
+## Developing
+
+Each mod in `plugins/<name>` is a standalone plugin. Its hooks are top-level handler functions with names unique to the mod, and its `register` only wires them up. **`plugins/all-mods` is generated**: after editing a mod, run `.\build-bundle.ps1` (it fails if two mods declare the same top-level name) and commit the result. Validate with `claude plugin validate plugins/<name>`.

@@ -1,11 +1,13 @@
 # Windows setup: points Claude Code at the mods in this folder via ~/.claude/settings.json.
-# Usage (PowerShell):  .\setup.ps1            # install
-#                      .\setup.ps1 -Remove    # uninstall
-param([switch]$Remove)
+# Usage (PowerShell):  .\setup.ps1              # install the all-mods bundle (all six mods)
+#                      .\setup.ps1 -Individual  # install the six mods as separate plugins instead
+#                      .\setup.ps1 -Remove      # uninstall
+# Do not mix the bundle with the individual mods: every mod would load twice.
+param([switch]$Remove, [switch]$Individual)
 
 $ErrorActionPreference = 'Stop'
 $plugins = Join-Path $PSScriptRoot 'plugins'
-$names = Get-ChildItem $plugins -Directory | Select-Object -ExpandProperty Name
+$names = if ($Individual) { Get-ChildItem $plugins -Directory | Where-Object { $_.Name -ne 'all-mods' } | Select-Object -ExpandProperty Name } else { @('all-mods') }
 $settings = Join-Path $env:USERPROFILE '.claude\settings.json'
 
 New-Item -ItemType Directory -Force (Split-Path $settings) | Out-Null

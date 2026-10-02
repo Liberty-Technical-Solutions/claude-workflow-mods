@@ -1,0 +1,1 @@
+{ "name": "all-mods", "version": "0.1.0", "description": "All six workflow mods in one install: ship-it, deploy-verifier, where-are-we, close-out-check, usage-guard, cache-keeper.", "types": "./types/index.d.ts" }
