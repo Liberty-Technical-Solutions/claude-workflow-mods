@@ -52,7 +52,7 @@ test('bundle: one band holds the strip and the next-steps list; clicking sends',
   await clock.advance(1000)
   await ui.redraw()
   expect(await ui.find({ key: 'ss-compress' })).toBeDefined()
-  expect((await ui.find({ key: 'ns-go-0' }))?.props.label).toBe('1  Run the tests')
+  expect((await ui.find({ key: 'ns-pick-0' }))?.props.label).toBe('[ ] 1  Run the tests')
 
   await ui.press({ key: 'ns-go-1' })
   expect(w.sent).toEqual(['Commit and push'])

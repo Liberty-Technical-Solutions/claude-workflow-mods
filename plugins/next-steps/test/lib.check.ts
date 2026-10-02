@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { DEFAULT_STEPS, parseSuggestions, suggestPrompt, withFallback } from '../hooks/lib.ts'
+import { DEFAULT_STEPS, combineSelected, parseSuggestions, suggestPrompt, togglePick, withFallback } from '../hooks/lib.ts'
 
 test('parseSuggestions: plain array, fences and chatter', () => {
   assert.deepEqual(parseSuggestions('["Run the tests", "Commit the changes"]', 4), ['Run the tests', 'Commit the changes'])
@@ -28,4 +28,19 @@ test('withFallback', () => {
 test('suggestPrompt mentions the count and the JSON-only rule', () => {
   assert.match(suggestPrompt(4), /up to 4/)
   assert.match(suggestPrompt(4), /ONLY a JSON array/)
+})
+
+test('combineSelected: none, one, several', () => {
+  assert.equal(combineSelected([]), '')
+  assert.equal(combineSelected(['Run the tests']), 'Run the tests')
+  assert.equal(
+    combineSelected(['Run the tests', 'Commit and push']),
+    'Please do these in order, and tell me when each is done:\n1. Run the tests\n2. Commit and push',
+  )
+})
+
+test('togglePick: adds, removes, keeps display order', () => {
+  assert.deepEqual(togglePick([], 2), [2])
+  assert.deepEqual(togglePick([2], 0), [0, 2])
+  assert.deepEqual(togglePick([0, 2], 2), [0])
 })

@@ -36,26 +36,43 @@ async function replyDone($: any, clock: any) {
   await clock.advance(1000)
 }
 
-test('after a turn the options appear; clicking one sends it and clears the list', async ($, on) => {
+test('options appear as checkboxes; ticking several and pressing Send selected sends one ordered request', async ($, on) => {
   mock.store(on)
   const clock = mock.clock(on, { now: 1_000 })
   const w = world(on, 'Sure:\n["Run the tests", "Commit and push", "Review the diff"]')
   await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
   const ui = await $.ui.mount({ plugin: 'next-steps', surface: 'terminal', component: 'AbovePrompt', props: PROPS })
 
-  expect(await ui.find({ key: 'ns-go-0' })).toBeUndefined()
+  expect(await ui.find({ key: 'ns-pick-0' })).toBeUndefined()
   await replyDone($, clock)
   await ui.redraw()
-  expect((await ui.find({ key: 'ns-go-0' }))?.props.label).toBe('1  Run the tests')
-  expect((await ui.find({ key: 'ns-go-2' }))?.props.label).toBe('3  Review the diff')
+  expect((await ui.find({ key: 'ns-pick-0' }))?.props.label).toBe('[ ] 1  Run the tests')
+  expect((await ui.find({ key: 'ns-pick-2' }))?.props.label).toBe('[ ] 3  Review the diff')
   expect(w.suggested[0]).toBe('Run the tests')
 
-  await ui.press({ key: 'ns-go-1' })
-  expect(w.sent).toEqual(['Commit and push'])
-  expect(await ui.find({ key: 'ns-go-0' })).toBeUndefined()
+  await ui.press({ key: 'ns-pick-0' })
+  await ui.press({ key: 'ns-pick-1' })
+  expect((await ui.find({ key: 'ns-pick-1' }))?.props.label).toBe('[x] 2  Commit and push')
+  expect((await ui.find({ key: 'ns-send' }))?.props.label).toBe('Send selected (2)')
+
+  await ui.press({ key: 'ns-send' })
+  expect(w.sent).toEqual(['Please do these in order, and tell me when each is done:\n1. Run the tests\n2. Commit and push'])
+  expect(await ui.find({ key: 'ns-pick-0' })).toBeUndefined()
 })
 
-test('edit puts the option in the prompt box instead of sending it', async ($, on) => {
+test('each row has a one-click send for just that option', async ($, on) => {
+  mock.store(on)
+  const clock = mock.clock(on, { now: 1_000 })
+  const w = world(on, '["Run the tests", "Commit and push"]')
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount({ plugin: 'next-steps', surface: 'terminal', component: 'AbovePrompt', props: PROPS })
+  await replyDone($, clock)
+  await ui.redraw()
+  await ui.press({ key: 'ns-go-1' })
+  expect(w.sent).toEqual(['Commit and push'])
+})
+
+test('Send selected does nothing until something is ticked', async ($, on) => {
   mock.store(on)
   const clock = mock.clock(on, { now: 1_000 })
   const w = world(on, '["Run the tests"]')
@@ -63,7 +80,21 @@ test('edit puts the option in the prompt box instead of sending it', async ($, o
   const ui = await $.ui.mount({ plugin: 'next-steps', surface: 'terminal', component: 'AbovePrompt', props: PROPS })
   await replyDone($, clock)
   await ui.redraw()
-  await ui.press({ key: 'ns-edit-0' })
+  await ui.press({ key: 'ns-send' })
+  expect(w.sent).toEqual([])
+  expect((await ui.find({ key: 'ns-pick-0' }))?.props.label).toBe('[ ] 1  Run the tests')
+})
+
+test('Edit selected puts the ticked options in the prompt box instead of sending', async ($, on) => {
+  mock.store(on)
+  const clock = mock.clock(on, { now: 1_000 })
+  const w = world(on, '["Run the tests"]')
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount({ plugin: 'next-steps', surface: 'terminal', component: 'AbovePrompt', props: PROPS })
+  await replyDone($, clock)
+  await ui.redraw()
+  await ui.press({ key: 'ns-pick-0' })
+  await ui.press({ key: 'ns-edit' })
   expect(w.filled).toEqual(['Run the tests'])
   expect(w.sent).toEqual([])
 })
@@ -76,8 +107,8 @@ test('when the model gives nothing usable, built-in suggestions are shown', asyn
   const ui = await $.ui.mount({ plugin: 'next-steps', surface: 'terminal', component: 'AbovePrompt', props: PROPS })
   await replyDone($, clock)
   await ui.redraw()
-  expect((await ui.find({ key: 'ns-go-0' }))?.props.label).toBe('1  Run the tests and show me the results')
-  expect(JSON.stringify(await ui.findAll({ type: 'Text' }))).toContain('next steps (suggested)')
+  expect((await ui.find({ key: 'ns-pick-0' }))?.props.label).toBe('[ ] 1  Run the tests and show me the results')
+  expect(JSON.stringify(await ui.findAll({ type: 'Text' }))).toContain('Suggestions:')
 })
 
 test('Off hides the options and stops asking', async ($, on) => {
@@ -89,8 +120,8 @@ test('Off hides the options and stops asking', async ($, on) => {
   await replyDone($, clock)
   await ui.redraw()
   await ui.press({ key: 'ns-off' })
-  expect(await ui.find({ key: 'ns-go-0' })).toBeUndefined()
+  expect(await ui.find({ key: 'ns-pick-0' })).toBeUndefined()
   await replyDone($, clock)
   await ui.redraw()
-  expect(await ui.find({ key: 'ns-go-0' })).toBeUndefined()
+  expect(await ui.find({ key: 'ns-pick-0' })).toBeUndefined()
 })

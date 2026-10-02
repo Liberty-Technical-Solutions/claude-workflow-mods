@@ -51,3 +51,15 @@ export function parseSuggestions(text: string, max: number): string[] {
 export function withFallback(items: string[], max: number): { items: string[]; isFallback: boolean } {
   return items.length > 0 ? { items, isFallback: false } : { items: DEFAULT_STEPS.slice(0, max), isFallback: true }
 }
+
+/** Turns the ticked options into one request: a single option as written, several as an ordered list. */
+export function combineSelected(items: string[]): string {
+  if (items.length === 0) return ''
+  if (items.length === 1) return items[0]
+  return ['Please do these in order, and tell me when each is done:', ...items.map((t, i) => `${i + 1}. ${t}`)].join('\n')
+}
+
+/** Ticks or unticks one option, keeping the list in display order. */
+export function togglePick(picked: number[], index: number): number[] {
+  return (picked.includes(index) ? picked.filter(i => i !== index) : [...picked, index]).sort((a, b) => a - b)
+}
