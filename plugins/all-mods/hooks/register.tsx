@@ -440,14 +440,13 @@ async function ssRenderStrip($: any, e: any, next: any) {
 
   const { Box, Text, Button, Select } = $.ui.resolve(e)
   const toneColor = (t: string) => (t === 'warning' || t === 'error' || t === 'success' ? t : undefined)
-  const cell = (id: string, label: string, v: { text: string; tone: string }, button: any, isRight: boolean) => (
-    <Box key={`ss-cell-${id}`} flexDirection="column" alignItems={isRight ? 'flex-end' : 'flex-start'} minWidth={14}>
-      <Box flexDirection="column" paddingLeft={isRight ? 0 : 2} paddingRight={isRight ? 2 : 0} alignItems={isRight ? 'flex-end' : 'flex-start'}>
-        <Text dimColor>{label}</Text>
-        <Text color={toneColor(v.tone)} dimColor={v.tone === 'dim'}>
-          {v.text}
-        </Text>
-      </Box>
+  // One compact item on one line: dim label, then its value, then its button.
+  const cell = (id: string, label: string, v: { text: string; tone: string }, button: any) => (
+    <Box key={`ss-cell-${id}`} gap={1}>
+      <Text dimColor>{label}</Text>
+      <Text color={toneColor(v.tone)} dimColor={v.tone === 'dim'}>
+        {v.text}
+      </Text>
       {button}
     </Box>
   )
@@ -469,11 +468,11 @@ async function ssRenderStrip($: any, e: any, next: any) {
 
   return (
     <Box flexDirection="column">
-      <Box gap={2}>
-        {cell('repo', 'repo', repo, repo.needs || repo.text === 'no repo' ? null : btn('ss-repo', 'Refresh', false, () => void ssRepoRefresh($)), false)}
-        {cell('docs', 'docs', docs, btn('ss-docs', 'Fix', docs.needs, () => void ssFixDocs($)), false)}
-        {deploy && cell('deploy', 'deploy', deploy, btn('ss-deploy', 'Dismiss', deploy.needs, () => void update($, ssDeploy, () => null)), false)}
-        {cell('ctx', 'context', ctx, btn('ss-compress', isArmed ? 'Compress…' : 'Compress', ctx.needs || isArmed, () => void ssAskCompress($)), false)}
+      <Box columnGap={2} flexWrap="wrap">
+        {cell('repo', 'repo', repo, null)}
+        {cell('docs', 'docs', docs, btn('ss-docs', 'Fix', docs.needs, () => void ssFixDocs($)))}
+        {deploy && cell('deploy', 'deploy', deploy, btn('ss-deploy', 'Dismiss', deploy.needs, () => void update($, ssDeploy, () => null)))}
+        {cell('ctx', 'context', ctx, btn('ss-compress', isArmed ? 'Compress…' : 'Compress', ctx.needs || isArmed, () => void ssAskCompress($)))}
         <Box flexGrow={1} />
         {cell(
           'cache',
@@ -483,7 +482,6 @@ async function ssRenderStrip($: any, e: any, next: any) {
             {btn('ss-refresh', cache.isExpired ? 'Refresh (full price)' : 'Refresh', cache.needs, () => void ssRefreshCache($))}
             <Button key="ss-gear" label="⚙ ▾" variant={ui.menu ? 'primary' : undefined} onPress={() => void ssPatchUi($, { menu: !ui.menu })} />
           </Box>,
-          true,
         )}
       </Box>
 
