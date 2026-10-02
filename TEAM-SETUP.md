@@ -2,7 +2,7 @@
 
 ## For team members (no technical knowledge needed)
 
-Paste this into Claude Code, one line at a time, pressing Enter after each:
+The simplest route for someone brand new is [GETTING-STARTED.md](GETTING-STARTED.md) (download a ZIP, double-click Install-Mods, type /mods). If your Claude offers the `/plugin` commands, this also works. Paste these into Claude Code, one line at a time, pressing Enter after each:
 
 ```
 /plugin marketplace add Liberty-Technical-Solutions/claude-workflow-mods

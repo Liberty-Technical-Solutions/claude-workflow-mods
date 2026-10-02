@@ -140,8 +140,16 @@ async function miInstall($: EngineInterface) {
 async function miUpdate($: EngineInterface) {
   const s = await read($, miState)
   if (s.ctx === null || s.ctx.mode !== 'folder') return
+  const repoRoot = parentDir(s.ctx.packRoot)
+  if (!(await $.fs.exists(joinPath(repoRoot, '.git')))) {
+    // A downloaded ZIP is not a git clone, so there is nothing to pull.
+    await miPatch($, {
+      msg: `This copy came from a downloaded ZIP, so it cannot update itself. To update: download the latest ZIP from github.com/${s.ctx.repo}, extract it over ${repoRoot} and choose Replace. Then open a new session; your choices are kept.`,
+    })
+    return
+  }
   await miPatch($, { msg: 'Checking for updates…' })
-  const r = await $.process.run(['git', '-C', parentDir(s.ctx.packRoot), 'pull', '--ff-only'], { timeoutMs: 90_000 }).catch(() => null)
+  const r = await $.process.run(['git', '-C', repoRoot, 'pull', '--ff-only'], { timeoutMs: 90_000 }).catch(() => null)
   const out = r === null ? '' : [r.stdout, r.stderr].join(' ').trim()
   await miLoad($)
   if (r === null || r.exitCode !== 0) {

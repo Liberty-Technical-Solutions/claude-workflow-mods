@@ -14,9 +14,9 @@ const CATALOG = JSON.stringify({
 const key = (p: string) => p.replace(/^[A-Za-z]:/, '').split('\\').join('/')
 
 // Minimal in-memory disk. `siblings`: whether the mod folders sit next to the installer (folder mode).
-function memoryDisk(on: any, files: Map<string, string>, siblings: boolean, isWritable = true) {
+function memoryDisk(on: any, files: Map<string, string>, siblings: boolean, isWritable = true, hasGit = true) {
   on('ui.open', () => ({ value: { isPlaced: true } }))
-  on('fs.exists', ($: any, e: any) => ({ value: files.has(key(e.path)) || (siblings && /[\\/]ship-it$/.test(e.path)) }))
+  on('fs.exists', ($: any, e: any) => ({ value: files.has(key(e.path)) || (siblings && /[\\/]ship-it$/.test(e.path)) || (hasGit && /[\\/][.]git$/.test(e.path)) }))
   on('fs.read', ($: any, e: any) => {
     if (e.path.endsWith('catalog.json')) return { value: CATALOG }
     const text = files.get(key(e.path))
@@ -117,4 +117,20 @@ test('folder mode: Update mods now runs git pull and reports the result', async 
   expect(calls.some(c => c.includes('pull') && c.includes('--ff-only'))).toBe(true)
   const text = JSON.stringify(await ui.findAll({ type: 'Text' }))
   expect(text).toContain('Updated. Start a NEW session')
+})
+
+test('folder mode from a downloaded ZIP: Update mods now explains how to update instead of failing', async ($, on) => {
+  const files = new Map([[SETTINGS, '{}']])
+  mock.env(on, { HOME: '/home' })
+  mock.store(on)
+  memoryDisk(on, files, true, true, false)
+  on('process.run', () => {
+    throw new Error('git must not run for a ZIP copy')
+  })
+
+  await $.command.run({ command: 'mods', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: false } as any })
+  const ui = await $.ui.mount({ plugin: 'mod-installer', surface: 'terminal', component: 'Pane', props: TERMINAL, requestId: 'mod-installer' })
+  await ui.press({ key: 'update' })
+
+  expect(JSON.stringify(await ui.findAll({ type: 'Text' }))).toContain('downloaded ZIP')
 })
