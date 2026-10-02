@@ -1,0 +1,1 @@
+{ "name": "status-strip", "description": "One quiet strip above the prompt: repo, docs, deploy, context and cache, each with its own button. Includes Compress with a confirmation and a cache settings dropdown.", "types": "./types/index.d.ts" }

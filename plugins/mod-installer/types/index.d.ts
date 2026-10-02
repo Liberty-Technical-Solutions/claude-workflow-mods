@@ -10,7 +10,7 @@ export type CatalogMod = {
   needs: string
 }
 
-export type Catalog = { marketplace: string; repo: string; mods: CatalogMod[] }
+export type Catalog = { marketplace: string; repo: string; legacyIds?: string[]; mods: CatalogMod[] }
 
 export type InstallerCtx = {
   mode: 'folder' | 'marketplace'
@@ -20,6 +20,7 @@ export type InstallerCtx = {
   ids: string[]
   installerId: string
   bundleId: string
+  legacyIds: string[]
   sep: string
 }
 

@@ -1,0 +1,96 @@
+// Run:  claude plugin test plugins/next-steps
+import { expect, mock, test } from 'claude-code/testing'
+
+const PROPS = { hasSurvey: false, bodyColumns: 100 } as any
+const USAGE = { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 1, cache_creation_input_tokens: 0 }
+
+function world(on: any, reply: string | null) {
+  const sent: string[] = []
+  const filled: string[] = []
+  const suggested: string[] = []
+  on('session.start', ($: any, e: any) => ({ cwd: e.cwd }))
+  on('command.register', () => ({ value: undefined }))
+  on('model.fork', () => ({ value: reply === null ? { isAnswered: false, reason: 'api-error', usage: USAGE } : { isAnswered: true, text: reply, usage: USAGE } }))
+  on('prompt.suggest', ($: any, e: any) => {
+    suggested.push(e.text)
+    return { value: { isShown: true } }
+  })
+  on('prompt.fill', ($: any, e: any) => {
+    filled.push(e.text)
+    return { value: { isFilled: true } }
+  })
+  on('prompt.submit', ($: any, e: any) => {
+    sent.push(e.text)
+    return { value: { text: e.text } }
+  })
+  on('turn.complete', ($: any, e: any) => ({ text: e.answer }))
+  on('ui.render', ($: any, e: any) => {
+    const { Box } = $.ui.resolve(e)
+    return (globalThis as any).h(Box, {})
+  })
+  return { sent, filled, suggested }
+}
+
+async function replyDone($: any, clock: any) {
+  await $.turn.complete({ answer: 'done', durationMs: 1, isAborted: false, turnId: 't1' } as any)
+  await clock.advance(1000)
+}
+
+test('after a turn the options appear; clicking one sends it and clears the list', async ($, on) => {
+  mock.store(on)
+  const clock = mock.clock(on, { now: 1_000 })
+  const w = world(on, 'Sure:\n["Run the tests", "Commit and push", "Review the diff"]')
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount({ plugin: 'next-steps', surface: 'terminal', component: 'AbovePrompt', props: PROPS })
+
+  expect(await ui.find({ key: 'ns-go-0' })).toBeUndefined()
+  await replyDone($, clock)
+  await ui.redraw()
+  expect((await ui.find({ key: 'ns-go-0' }))?.props.label).toBe('1  Run the tests')
+  expect((await ui.find({ key: 'ns-go-2' }))?.props.label).toBe('3  Review the diff')
+  expect(w.suggested[0]).toBe('Run the tests')
+
+  await ui.press({ key: 'ns-go-1' })
+  expect(w.sent).toEqual(['Commit and push'])
+  expect(await ui.find({ key: 'ns-go-0' })).toBeUndefined()
+})
+
+test('edit puts the option in the prompt box instead of sending it', async ($, on) => {
+  mock.store(on)
+  const clock = mock.clock(on, { now: 1_000 })
+  const w = world(on, '["Run the tests"]')
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount({ plugin: 'next-steps', surface: 'terminal', component: 'AbovePrompt', props: PROPS })
+  await replyDone($, clock)
+  await ui.redraw()
+  await ui.press({ key: 'ns-edit-0' })
+  expect(w.filled).toEqual(['Run the tests'])
+  expect(w.sent).toEqual([])
+})
+
+test('when the model gives nothing usable, built-in suggestions are shown', async ($, on) => {
+  mock.store(on)
+  const clock = mock.clock(on, { now: 1_000 })
+  world(on, null)
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount({ plugin: 'next-steps', surface: 'terminal', component: 'AbovePrompt', props: PROPS })
+  await replyDone($, clock)
+  await ui.redraw()
+  expect((await ui.find({ key: 'ns-go-0' }))?.props.label).toBe('1  Run the tests and show me the results')
+  expect(JSON.stringify(await ui.findAll({ type: 'Text' }))).toContain('next steps (suggested)')
+})
+
+test('Off hides the options and stops asking', async ($, on) => {
+  mock.store(on)
+  const clock = mock.clock(on, { now: 1_000 })
+  world(on, '["Run the tests"]')
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount({ plugin: 'next-steps', surface: 'terminal', component: 'AbovePrompt', props: PROPS })
+  await replyDone($, clock)
+  await ui.redraw()
+  await ui.press({ key: 'ns-off' })
+  expect(await ui.find({ key: 'ns-go-0' })).toBeUndefined()
+  await replyDone($, clock)
+  await ui.redraw()
+  expect(await ui.find({ key: 'ns-go-0' })).toBeUndefined()
+})

@@ -16,7 +16,7 @@ foreach ($d in '.claude-plugin', 'hooks', 'types') { New-Item -ItemType Director
 $utf8 = New-Object System.Text.UTF8Encoding($false)
 function Save($path, $text) { [System.IO.File]::WriteAllText($path, ($text -replace "`r`n", "`n"), $utf8) }
 
-$bodies = @(); $typeBodies = @(); $stateKeys = @(); $typeNames = @()
+$bodies = @(); $typeBodies = @(); $stateKeys = @(); $typeNames = @(); $libImports = @()
 $groups = [ordered]@{}   # "event|matcher" -> list of handler names, in mod order
 $seen = @{}              # top-level name -> mod
 
@@ -28,6 +28,12 @@ foreach ($mod in $mods) {
   $body = $text.Substring(0, $cut)
   $reg = $text.Substring($cut)
 
+  # Pure helper files (no $) are copied beside the bundle and imported under a per-mod name; every other import is dropped.
+  $libFile = Join-Path $root "plugins\$mod\hooks\lib.ts"
+  if (Test-Path $libFile) {
+    Save (Join-Path $out "hooks\$mod-lib.ts") ("// GENERATED copy of plugins/$mod/hooks/lib.ts by build-bundle.ps1. Do not edit.`n" + [System.IO.File]::ReadAllText($libFile))
+    foreach ($line in ($body -split "`n" | Where-Object { $_ -match "^import .* from '\./lib'" })) { $libImports += $line.Replace("'./lib'", "'./$mod-lib'") }
+  }
   $body = ($body -split "`n" | Where-Object { $_ -notmatch '^import ' }) -join "`n"
   $body = [regex]::Replace($body, "plugin: '$mod', key: '([^']+)'", "plugin: 'all-mods', key: '$mod.`$1'")
 
@@ -49,9 +55,16 @@ foreach ($mod in $mods) {
     $t = [System.IO.File]::ReadAllText($typesFile) -replace "`r`n", "`n"
     $typeBodies += $t.Substring(0, $t.IndexOf('declare module')).TrimEnd()
     foreach ($tn in [regex]::Matches($t, 'export type (\w+)')) { $typeNames += $tn.Groups[1].Value }
-    $sm = [regex]::Match($t, "'$mod':\s*\{(.*?)\}\s*\}\s*\}", 'Singleline')
-    foreach ($pair in ($sm.Groups[1].Value -split ';')) {
-      if ($pair.Trim()) { $k, $v = $pair.Split(':', 2); $stateKeys += "    '$mod.$($k.Trim())': $($v.Trim())" }
+    # The mod's state keys: the text inside its  'mod': { ... }  block, one `key: type` per line or per ';'.
+    $open = $t.IndexOf("'$mod': {")
+    if ($open -ge 0) {
+      $i = $t.IndexOf('{', $open); $depth = 0; $j = $i
+      do { if ($t[$j] -eq '{') { $depth++ } elseif ($t[$j] -eq '}') { $depth-- }; $j++ } while ($depth -gt 0 -and $j -lt $t.Length)
+      $inner = $t.Substring($i + 1, $j - $i - 2)
+      foreach ($pair in ($inner -split "[;`n]")) {
+        $pair = $pair.Trim()
+        if ($pair -and $pair -notmatch '^(//|/\*|\*)') { $k, $v = $pair.Split(':', 2); $stateKeys += "    '$mod.$($k.Trim())': $($v.Trim())" }
+      }
     }
   }
 }
@@ -74,6 +87,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { $(($typeNames | Select-Object -Unique) -join ', ') } from '../types'
+$($libImports -join "`n")
 
 $($bodies -join "`n`n")
 

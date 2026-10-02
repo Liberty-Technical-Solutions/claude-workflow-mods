@@ -16,34 +16,24 @@
                         "description":  "Everything in one install, no choices. Install this OR the individual mods, never both."
                     },
                     {
+                        "name":  "status-strip",
+                        "source":  "./plugins/status-strip",
+                        "description":  "One quiet strip: repo, docs, deploy, context and cache, each with a button"
+                    },
+                    {
+                        "name":  "next-steps",
+                        "source":  "./plugins/next-steps",
+                        "description":  "Clickable options for what to do next, so you click instead of type"
+                    },
+                    {
                         "name":  "ship-it",
                         "source":  "./plugins/ship-it",
                         "description":  "A bare \"deploy it\" becomes the full ship checklist"
                     },
                     {
-                        "name":  "deploy-verifier",
-                        "source":  "./plugins/deploy-verifier",
-                        "description":  "After a push/merge/deploy: CI status and is the new version live"
-                    },
-                    {
-                        "name":  "where-are-we",
-                        "source":  "./plugins/where-are-we",
-                        "description":  "Session-start snapshot of branch, PR, gh sign-in and dev servers"
-                    },
-                    {
-                        "name":  "close-out-check",
-                        "source":  "./plugins/close-out-check",
-                        "description":  "Flags a stale CHANGELOG, version or handoff note after code changes"
-                    },
-                    {
                         "name":  "usage-guard",
                         "source":  "./plugins/usage-guard",
-                        "description":  "Rate-limit usage in the status line; guards agent fan-out"
-                    },
-                    {
-                        "name":  "cache-keeper",
-                        "source":  "./plugins/cache-keeper",
-                        "description":  "Prompt-cache clock with Refresh, Compress and an optional Auto keep-alive"
+                        "description":  "Rate-limit usage in the bottom bar; guards agent fan-out"
                     }
                 ]
 }

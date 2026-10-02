@@ -1,1 +1,0 @@
-{ "name": "close-out-check", "description": "After each turn that changed code, flags a stale CHANGELOG / version / handoff note and offers a one-press fix.", "types": "./types/index.d.ts" }

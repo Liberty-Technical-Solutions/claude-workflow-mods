@@ -7,6 +7,7 @@ const TERMINAL = { title: 'Workflow mods', isFocused: true, bodyColumns: 100 } a
 const CATALOG = JSON.stringify({
   marketplace: 'workflow-mods',
   repo: 'org/repo',
+  legacyIds: ['where-are-we'],
   mods: ['ship-it', 'cache-keeper', 'usage-guard'].map(id => ({ id, name: id, summary: `${id} summary`, where: 'w', preview: [{ text: 'p' }], cost: 'c', needs: 'n' })),
 })
 

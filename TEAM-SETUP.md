@@ -22,7 +22,7 @@ To change your mind later, type `/mods` again.
 
 ### Message you can send to the team
 
-> Hi all, we have a few add-ons for Claude Code that save time (deploy checklists, status bars, usage warnings). Takes about two minutes:
+> Hi all, we have a few add-ons for Claude Code that save time (a status strip, clickable next steps, deploy checklists, usage warnings). Takes about two minutes:
 > 1. In Claude Code, paste `/plugin marketplace add Liberty-Technical-Solutions/claude-workflow-mods` and press Enter.
 > 2. Paste `/plugin install mod-installer@workflow-mods` and press Enter.
 > 3. Close Claude Code and open a new session. Type `/mods`, leave everything ticked, click **Install selected**, then **Confirm install**.

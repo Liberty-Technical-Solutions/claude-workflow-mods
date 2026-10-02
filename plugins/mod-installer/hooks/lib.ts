@@ -12,17 +12,19 @@ export type Ctx = {
   ids: string[] // every installable mod in the catalog
   installerId: string
   bundleId: string
+  /** Mods that were folded into newer ones; they are recognised and replaced, never offered. */
+  legacyIds: string[]
   sep: string // separator inside CLAUDE_CODE_PLUGIN_DIRS
 }
 
-export type Plan = { add: string[]; remove: string[]; replacesBundle: boolean }
+export type Plan = { add: string[]; remove: string[]; replacesBundle: boolean; replacesLegacy: string[] }
 
 export const norm = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
 export const pathSep = (home: string) => (/^[A-Za-z]:|\\/.test(home) ? ';' : ':')
 export const parentDir = (p: string) => p.replace(/[\\/]+$/, '').replace(/[\\/][^\\/]*$/, '')
 export const joinPath = (root: string, id: string) => root + (root.includes('\\') ? '\\' : '/') + id
 
-const known = (c: Ctx, id: string) => c.ids.includes(id) || id === c.bundleId
+const known = (c: Ctx, id: string) => c.ids.includes(id) || id === c.bundleId || c.legacyIds.includes(id)
 
 /** Which catalog mods (and the bundle) the user's settings enable right now. */
 export function detectInstalled(settings: any, c: Ctx): string[] {
@@ -47,8 +49,9 @@ export function detectInstalled(settings: any, c: Ctx): string[] {
 export function buildPlan(installed: string[], selected: string[], c: Ctx): Plan {
   return {
     add: selected.filter(id => !installed.includes(id)),
-    remove: installed.filter(id => id !== c.bundleId && !selected.includes(id)),
+    remove: installed.filter(id => id !== c.bundleId && !c.legacyIds.includes(id) && !selected.includes(id)),
     replacesBundle: installed.includes(c.bundleId),
+    replacesLegacy: installed.filter(id => c.legacyIds.includes(id)),
   }
 }
 
@@ -74,6 +77,7 @@ export function applySelection(settings: any, selected: string[], c: Ctx): any {
     else delete enabled[key(id)]
   }
   delete enabled[key(c.bundleId)]
+  for (const id of c.legacyIds) delete enabled[key(id)]
   enabled[key(c.installerId)] = true
   out.enabledPlugins = enabled
   out.extraKnownMarketplaces = { ...(out.extraKnownMarketplaces ?? {}) }

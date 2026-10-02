@@ -58,18 +58,21 @@ async function miLoad($: EngineInterface) {
       ids,
       installerId: 'mod-installer',
       bundleId: 'all-mods',
+      legacyIds: catalog.legacyIds ?? [],
       sep: pathSep(home),
     }
 
     const { json } = await miReadSettings($, settingsPath)
     const installed = detectInstalled(json, ctx)
-    const selected = installed.length > 0 ? installed.filter(id => id !== ctx.bundleId) : ids
+    // Replacing the bundle or the old separate mods: start from everything, since they covered it all.
+    const isReplacing = installed.includes(ctx.bundleId) || installed.some(id => ctx.legacyIds.includes(id))
+    const selected = installed.length > 0 && !isReplacing ? installed : ids
     await miPatch($, {
       catalog,
       ctx,
       settingsPath,
       installed,
-      selected: installed.includes(ctx.bundleId) ? ids : selected,
+      selected,
       focus: ids[0] ?? null,
       phase: 'edit',
       plan: [],
@@ -103,6 +106,7 @@ async function miReview($: EngineInterface) {
     plan.add.length ? `Add: ${plan.add.join(', ')}` : 'Add: nothing',
     plan.remove.length ? `Remove: ${plan.remove.join(', ')}` : 'Remove: nothing',
     ...(plan.replacesBundle ? ['The all-mods bundle is replaced by your selection (otherwise mods would load twice).'] : []),
+    ...(plan.replacesLegacy.length ? [`The old separate mods (${plan.replacesLegacy.join(', ')}) are replaced by the new status-strip and next-steps.`] : []),
     'Your other settings and plugin folders are kept. A backup is saved next to the file.',
   ]
   await miPatch($, { phase: 'confirm', plan: lines, msg: '' })

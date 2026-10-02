@@ -1,0 +1,1 @@
+{ "name": "next-steps", "description": "After each turn, shows a few clickable options for what to do next so you can click instead of typing. Click to send, or Edit to tweak first.", "types": "./types/index.d.ts" }

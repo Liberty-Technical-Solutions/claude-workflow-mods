@@ -13,6 +13,7 @@ const folder = {
   ids,
   installerId: 'mod-installer',
   bundleId: 'all-mods',
+  legacyIds: ['where-are-we', 'close-out-check'],
   sep: ';',
 }
 const market = { ...folder, mode: 'marketplace' as const }
@@ -68,6 +69,21 @@ test('marketplace mode: existing entry is kept; autoUpdate is added unless the p
 
 test('plan', () => {
   const plan = buildPlan(['ship-it', 'all-mods'], ['ship-it', 'cache-keeper'], folder)
-  assert.deepEqual(plan, { add: ['cache-keeper'], remove: [], replacesBundle: true })
-  assert.deepEqual(buildPlan(['ship-it', 'usage-guard'], ['ship-it'], folder), { add: [], remove: ['usage-guard'], replacesBundle: false })
+  assert.deepEqual(plan, { add: ['cache-keeper'], remove: [], replacesBundle: true, replacesLegacy: [] })
+  assert.deepEqual(buildPlan(['ship-it', 'usage-guard'], ['ship-it'], folder), { add: [], remove: ['usage-guard'], replacesBundle: false, replacesLegacy: [] })
+})
+
+test('legacy mods: detected, removed from enabledPlugins, reported in the plan', () => {
+  const s = { enabledPlugins: { 'where-are-we@workflow-mods': true, 'close-out-check@workflow-mods': true, 'ship-it@workflow-mods': true } }
+  assert.deepEqual(detectInstalled(s, market), ['where-are-we', 'close-out-check', 'ship-it'])
+  const out = applySelection(s, ['ship-it', 'usage-guard'], market)
+  assert.deepEqual(out.enabledPlugins, { 'ship-it@workflow-mods': true, 'usage-guard@workflow-mods': true, 'mod-installer@workflow-mods': true })
+  assert.deepEqual(buildPlan(['where-are-we', 'ship-it'], ['ship-it', 'usage-guard'], market), { add: ['usage-guard'], remove: [], replacesBundle: false, replacesLegacy: ['where-are-we'] })
+})
+
+test('legacy mods in folder mode are dropped with the other pack folders', () => {
+  const s = { env: { CLAUDE_CODE_PLUGIN_DIRS: 'C:\\Users\\me\\pack\\plugins\\where-are-we;C:\\keep\\me' } }
+  assert.deepEqual(detectInstalled(s, folder), ['where-are-we'])
+  const out = applySelection(s, ['usage-guard'], folder)
+  assert.equal(out.env.CLAUDE_CODE_PLUGIN_DIRS, 'C:\\keep\\me;C:\\Users\\me\\pack\\plugins\\mod-installer;C:\\Users\\me\\pack\\plugins\\usage-guard')
 })

@@ -1,1 +1,0 @@
-{ "name": "deploy-verifier", "description": "After a push/merge/deploy, watches CI and the live health endpoint and shows whether the new version is actually serving.", "types": "./types/index.d.ts" }

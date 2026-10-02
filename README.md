@@ -1,6 +1,6 @@
 # Claude Code workflow mods
 
-Small mods for Claude Code (early-access "function hook" plugins): bands above the prompt, a status-line entry, a `/where` command and one prompt rewrite. None of them contain secrets or account data.
+Small mods for Claude Code (early-access "function hook" plugins): a status strip and clickable next steps above the prompt, a usage readout in the bottom bar, a `/where` command and one prompt rewrite. None of them contain secrets or account data.
 
 ## Install: pick what you want (recommended)
 
@@ -57,29 +57,30 @@ The scripts edit `~/.claude/settings.json` (backup: `settings.json.bak-before-mo
 
 | Mod | What it does | Uses tokens? |
 |---|---|---|
+| `status-strip` | One quiet strip above the prompt: repo, docs, deploy, context and cache. Each is a dim label with its value underneath and one button (dim until something needs doing). **Compress** asks for confirmation first. The cache **⚙ ▾** dropdown sets lifetime, keep-alive, idle stop and warn level once. Also adds `/where` | Checking is free. Refresh and Auto keep-alive read the cached context (~10% price); Compress is one summarizing call. Auto is off by default |
+| `next-steps` | After each reply, a few clickable options for what to do next (click to send, or **edit** first). Uses what Claude proposed, otherwise suggests sensible next tasks, with a built-in list as a backstop. `/next` turns it off | One small question per reply over the cached conversation (a cache read plus ~100 output tokens) |
 | `ship-it` | A bare "deploy it" / "ship it" / "merge it" gets the full commit-PR-merge-deploy-verify checklist attached (hidden context) | A few hundred extra tokens on those prompts only |
-| `deploy-verifier` | After a push/merge/deploy command, shows CI status and whether the new version is live | No |
-| `where-are-we` | Session-start band (branch, dirty files, PR, gh auth, dev servers). `/where` hands it to Claude | No (`/where` adds a few hundred) |
-| `close-out-check` | After a code-changing turn, flags a stale CHANGELOG / version / HANDOFF; **Fix** button | No (Fix = one prompt) |
-| `usage-guard` | Rate-limit usage in the status line; toast at 85%, blocks new agents at 97% | No |
-| `cache-keeper` | Prompt-cache clock, **Refresh**, **Compress**, optional **Auto** keep-alive (8h idle cap, pauses when a newer session opens in the same folder) | Refresh/Auto read the cached context (~10% price); Compress is one summarizing call |
+| `usage-guard` | Rate-limit usage in the bottom bar; toast at 85%, blocks new agents at 97% | No |
+
+> `status-strip` replaces the four earlier mods `where-are-we`, `close-out-check`, `deploy-verifier` and `cache-keeper`. The installer recognises those and swaps them for `status-strip` when you press **Install selected**.
 
 ## Requirements
 
 - A Claude Code build with function-hook mods enabled (`claude plugin validate` must understand the `hooks.json` `modules` form). An organization policy can disable this.
-- `git` on PATH for `where-are-we`, `deploy-verifier`, `close-out-check`; the GitHub CLI (`gh`) for CI and PR status.
+- `git` on PATH for the repo and docs cells of `status-strip`; the GitHub CLI (`gh`) for its deploy cell and `/where`.
 
 ## Optional per-repo files (commit them with the repo)
 
-- `.claude/deploy-verify.json`: `{ "healthUrl": "https://your-app/api/health", "versionField": "version", "versionFile": "package.json" }`. Without it `deploy-verifier` shows CI only.
-- `.claude/where.json`: `{ "ports": [3000, 8347], "docs": ["HANDOFF.md"] }`.
+- `.claude/deploy-verify.json`: `{ "healthUrl": "https://your-app/api/health", "versionField": "version", "versionFile": "package.json" }`. Without it the deploy cell shows CI only.
+- `.claude/where.json`: `{ "ports": [3000, 8347], "docs": ["HANDOFF.md"] }` (used by `/where`).
 
 ## Things to know
 
 - The installer writes `~/.claude/settings.json`. If Claude blocks that write, it shows a **Copy new settings.json** button so you can paste it yourself.
 - `ship-it` relies on the repo documenting its deploy steps; if none exist it tells Claude to stop and ask.
-- `where-are-we` runs `git fetch` and probes a few localhost ports at session start.
-- `cache-keeper` assumes a 60-minute cache lifetime; use its **Cache lifetime** button to switch to 5m if your plan differs. Auto is off by default.
+- `/where` runs `git fetch` and probes a few localhost ports.
+- `status-strip` assumes a 60-minute cache lifetime; change it in the **⚙ ▾** dropdown if your plan differs. Auto keep-alive is off by default, stops after 8 idle hours, and pauses when a newer session opens in the same folder.
+- `next-steps` costs one small request per reply; turn it off with **Off** or `/next` if you would rather not.
 - `usage-guard` can warn and block but cannot show a confirm dialog.
 - If a mod fails to load, the session transcript shows a dim line naming the hook and the reason (`claude --debug` has more).
 

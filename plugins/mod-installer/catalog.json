@@ -1,7 +1,38 @@
 {
   "marketplace": "workflow-mods",
   "repo": "Liberty-Technical-Solutions/claude-workflow-mods",
+  "legacyIds": ["where-are-we", "close-out-check", "deploy-verifier", "cache-keeper"],
   "mods": [
+    {
+      "id": "status-strip",
+      "name": "status-strip",
+      "summary": "One quiet strip: repo, docs, deploy, context and cache, each with a button",
+      "where": "A strip above the prompt. Each item is a dim label with its value underneath and one button, dim until something needs doing. Cache sits on the far right with a settings dropdown. Also adds /where.",
+      "preview": [
+        { "text": "repo            docs            context                                    cache" },
+        { "text": "main ±3 ↑2      current         62%                                        expired", "dim": false },
+        { "text": "[ Refresh ]     [ Fix ]         [ Compress ]               [ Refresh (full price) ] [ ⚙ ▾ ]" },
+        { "text": "Compress asks first: \"Compress this conversation?\"  [ Yes, compress ] [ Cancel ]", "dim": true },
+        { "text": "⚙ ▾ opens dropdowns: cache lifetime, keep alive, idle stop, warn level, show always or only when needed", "dim": true }
+      ],
+      "cost": "Checking is free. Refresh and the optional Auto keep-alive read your cached context (about 10% of normal input price). Compress is one summarizing call. Auto is off by default.",
+      "needs": "git for the repo and docs cells; the GitHub CLI (gh) for the deploy cell. Optional .claude/deploy-verify.json with a healthUrl."
+    },
+    {
+      "id": "next-steps",
+      "name": "next-steps",
+      "summary": "Clickable options for what to do next, so you click instead of type",
+      "where": "A short list above the prompt after each reply. Click to send, or edit to change it first. You can still type anything.",
+      "preview": [
+        { "text": "next steps                                                        New ideas  Off" },
+        { "text": "[ 1  Run the tests and show me the results ]  edit", "buttons": [] },
+        { "text": "[ 2  Review what changed and point out any problems ]  edit", "dim": true },
+        { "text": "[ 3  Commit and push the changes ]  edit", "dim": true },
+        { "text": "[ 4  Update the docs and changelog for this work ]  edit", "dim": true }
+      ],
+      "cost": "One small question per reply over the cached conversation (a cache read plus about 100 output tokens). Turn it off with Off or /next.",
+      "needs": "Nothing. If Claude proposed options, those come first; otherwise it suggests sensible next tasks, with a built-in list as a backstop."
+    },
     {
       "id": "ship-it",
       "name": "ship-it",
@@ -16,66 +47,17 @@
       "needs": "A repo that documents its deploy steps (otherwise Claude stops and asks)."
     },
     {
-      "id": "deploy-verifier",
-      "name": "deploy-verifier",
-      "summary": "After a push/merge/deploy: CI status and is the new version live",
-      "where": "A band above the prompt that appears after a push, merge or deploy command.",
-      "preview": [
-        { "text": "deploy · ✔ CI passed (Deploy) · ✔ v3.22 is live", "buttons": ["Hide"] },
-        { "text": "deploy · ✘ CI failed (Deploy) · BILLING BLOCK: Actions refused to start", "buttons": ["Hide"] }
-      ],
-      "cost": "None (shell and HTTP checks only).",
-      "needs": "git and the GitHub CLI (gh). Optional .claude/deploy-verify.json with a healthUrl to check the live version."
-    },
-    {
-      "id": "where-are-we",
-      "name": "where-are-we",
-      "summary": "Session-start snapshot of branch, PR, gh sign-in and dev servers",
-      "where": "A band above the prompt at session start, plus a /where command.",
-      "preview": [
-        { "text": "main · 3 dirty · 2 unpushed · PR #12 OPEN · gh ✔ · up :8347 :3000", "buttons": ["Refresh", "Hide"] },
-        { "text": "! 1 commit(s) landed upstream, possibly from another session", "dim": false }
-      ],
-      "cost": "None for the band; /where adds a few hundred tokens when you run it.",
-      "needs": "git; gh for PR info. Runs git fetch and probes a few localhost ports at session start."
-    },
-    {
-      "id": "close-out-check",
-      "name": "close-out-check",
-      "summary": "Flags a stale CHANGELOG, version or handoff note after code changes",
-      "where": "A band above the prompt after any turn that changed code.",
-      "preview": [
-        { "text": "7 files changed, 120 insertions(+) · ! CHANGELOG not updated · version not bumped", "buttons": ["Fix", "Hide"] },
-        { "text": "3 files changed · ✔ docs & version look current", "buttons": ["Hide"], "dim": true }
-      ],
-      "cost": "None to check; the Fix button sends one prompt.",
-      "needs": "A git repo. Looks for CHANGELOG.md, package.json and HANDOFF/STATUS files."
-    },
-    {
       "id": "usage-guard",
       "name": "usage-guard",
-      "summary": "Rate-limit usage in the status line; guards agent fan-out",
-      "where": "The status line, plus a toast when an agent starts near a limit.",
+      "summary": "Rate-limit usage in the bottom bar; guards agent fan-out",
+      "where": "The bottom bar under the message box, plus a toast when an agent starts near a limit.",
       "preview": [
-        { "text": "status line:  usage 5h 62% · 7d 31%" },
+        { "text": "bottom bar:   usage 5h 62% · 7d 31%" },
         { "text": "toast (85%+): usage-guard: 5h usage at 88% — starting \"Audit sessions\"", "dim": true },
         { "text": "blocked (97%+): new agents are refused until the limit resets", "dim": true }
       ],
       "cost": "None.",
       "needs": "A plan that reports rate-limit usage. It may replace another status line entry."
-    },
-    {
-      "id": "cache-keeper",
-      "name": "cache-keeper",
-      "summary": "Prompt-cache clock with Refresh, Compress and an optional Auto keep-alive",
-      "where": "A band above the prompt, always on.",
-      "preview": [
-        { "text": "cache: 47m left (60m) · last turn 92% cached · context 62% (124k/200k)" },
-        { "text": "[Refresh] [Compress] [Cache lifetime: 60m · switch to 5m] [Auto: off · turn on] [Hide]" },
-        { "text": "Auto paused: idle for 8h.  [Close out] [Resume (8h more)]", "dim": true }
-      ],
-      "cost": "Refresh and Auto read your cached context (about 10% of normal input price). Compress is one summarizing call. Auto is off by default.",
-      "needs": "Nothing extra. Check the Cache lifetime button matches your plan (60m or 5m)."
     }
   ]
 }
