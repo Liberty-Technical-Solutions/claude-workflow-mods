@@ -1,6 +1,6 @@
-# Regenerates plugins/all-mods from the six individual mods.
-# Run after editing any mod in plugins/<name>:   .\build-bundle.ps1
-# plugins/all-mods is generated output: do not edit it by hand.
+# Regenerates plugins/all-mods and .claude-plugin/marketplace.json from plugins/mod-installer/catalog.json.
+# Run after editing any mod in plugins/<name> or the catalog:   .\build-bundle.ps1
+# The catalog is the single list of mods; plugins/all-mods and marketplace.json are generated: do not edit by hand.
 #
 # Why one merged file: the plugin loader only lets $ flow into functions declared in the SAME file, and
 # a plugin may register each event once. So every mod keeps its hooks as top-level handler functions with
@@ -8,7 +8,8 @@
 # mods' handlers in order, each one's next() being the next handler (then the engine's).
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
-$mods = 'ship-it', 'deploy-verifier', 'where-are-we', 'close-out-check', 'usage-guard', 'cache-keeper'
+$catalog = Get-Content (Join-Path $root 'plugins\mod-installer\catalog.json') -Raw | ConvertFrom-Json
+$mods = @($catalog.mods | ForEach-Object { $_.id })
 $out = Join-Path $root 'plugins\all-mods'
 
 foreach ($d in '.claude-plugin', 'hooks', 'types') { New-Item -ItemType Directory -Force (Join-Path $out $d) | Out-Null }
@@ -95,5 +96,20 @@ $($stateKeys -join ";`n");
 "@)
 
 Save (Join-Path $out 'hooks\hooks.json') '{ "modules": ["./register.tsx"] }'
-Save (Join-Path $out '.claude-plugin\plugin.json') '{ "name": "all-mods", "version": "0.1.0", "description": "All six workflow mods in one install: ship-it, deploy-verifier, where-are-we, close-out-check, usage-guard, cache-keeper.", "types": "./types/index.d.ts" }'
+Save (Join-Path $out '.claude-plugin\plugin.json') ('{ "name": "all-mods", "version": "0.1.0", "description": "All ' + $mods.Count + ' workflow mods in one install: ' + ($mods -join ', ') + '.", "types": "./types/index.d.ts" }')
 Write-Host "Built plugins/all-mods from: $($mods -join ', ')"
+
+# marketplace.json: the bundle, the installer, then every mod in the catalog.
+$entries = @(
+  [ordered]@{ name = 'mod-installer'; source = './plugins/mod-installer'; description = 'Start here: type /mods to preview the workflow mods, tick the ones you want and install them.' }
+  [ordered]@{ name = 'all-mods'; source = './plugins/all-mods'; description = 'Everything in one install, no choices. Install this OR the individual mods, never both.' }
+)
+foreach ($m in $catalog.mods) { $entries += [ordered]@{ name = $m.id; source = "./plugins/$($m.id)"; description = $m.summary } }
+$market = [ordered]@{
+  name = $catalog.marketplace
+  description = 'Small Claude Code mods for shipping, deploy verification, session status, usage limits and prompt-cache management.'
+  owner = [ordered]@{ name = 'Liberty Technical Solutions' }
+  plugins = $entries
+}
+Save (Join-Path $root '.claude-plugin\marketplace.json') (($market | ConvertTo-Json -Depth 6) + "`n")
+Write-Host "Wrote marketplace.json with $($entries.Count) plugins."

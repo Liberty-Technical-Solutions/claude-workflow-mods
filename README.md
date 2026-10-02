@@ -1,42 +1,55 @@
 # Claude Code workflow mods
 
-Six small mods for Claude Code (early-access "function hook" plugins). They add bands above the prompt, a status-line entry, a `/where` command and one prompt rewrite. None of them contain secrets or account data.
+Small mods for Claude Code (early-access "function hook" plugins): bands above the prompt, a status-line entry, a `/where` command and one prompt rewrite. None of them contain secrets or account data.
 
-## Quick install (everything, one step)
+## Install: pick what you want (recommended)
 
 In Claude Code:
 
 ```
 /plugin marketplace add Liberty-Technical-Solutions/claude-workflow-mods
+/plugin install mod-installer@workflow-mods
+```
+
+Start a new session, then type **`/mods`**. A pane lists every mod with a toggle (`[x]` / `[ ]`), a preview of what it shows on screen, what it costs in tokens and what it needs. Tick the ones you want and press **Install selected**. It shows exactly what it will change in your `settings.json` (and saves a backup) before you confirm. Run `/mods` again any time to add or remove mods; new mods added to this repo show up in the list.
+
+Mods load when a session starts, so the choice takes effect in your **next new session**.
+
+> Marketplace loading of function-hook mods is still unverified on our side. If `/mods` is missing after a new session starts, use the setup script below.
+
+## Install: everything, no choices
+
+```
 /plugin install all-mods@workflow-mods
 ```
 
-Then start a **new** session. That is the whole install: `all-mods` loads all six mods.
-
-**For a whole team, commit this to the repo's `.claude/settings.json`** (or put it in `~/.claude/settings.json` to apply everywhere). Teammates are then prompted to add the marketplace and enable the bundle the first time they open the repo:
+To prompt a whole team automatically, commit this to a repo's `.claude/settings.json` (or `~/.claude/settings.json` for everywhere):
 
 ```json
 {
   "extraKnownMarketplaces": {
     "workflow-mods": { "source": { "source": "github", "repo": "Liberty-Technical-Solutions/claude-workflow-mods" } }
   },
-  "enabledPlugins": { "all-mods@workflow-mods": true }
+  "enabledPlugins": { "mod-installer@workflow-mods": true }
 }
 ```
+(Use `"all-mods@workflow-mods": true` instead to give everyone every mod.)
 
-> Marketplace loading of function-hook mods is still unverified on our side. If `/where` is missing after a new session starts, use the setup script below instead.
+## Install without the marketplace
 
-**Without the marketplace** (clone this repo, then):
+Clone this repo, then:
 
 ```powershell
+.\setup.ps1 -Installer   # Windows: installs the /mods installer, then pick mods inside Claude
 .\setup.ps1              # Windows: installs the all-mods bundle
 ```
 ```bash
-./setup.sh               # macOS/Linux: installs the all-mods bundle
+./setup.sh --installer   # macOS/Linux: the /mods installer
+./setup.sh               # macOS/Linux: the all-mods bundle
 ```
-The scripts edit `~/.claude/settings.json` (backup: `settings.json.bak-before-mods`), keep your other plugin folders, and accept `-Remove` / `--remove` to undo. Add `-Individual` / `--individual` to install the six mods as separate plugins instead. Paths are absolute, so re-run the script if you move the folder.
+The scripts edit `~/.claude/settings.json` (backup: `settings.json.bak-before-mods`), keep your other plugin folders, and accept `-Remove` / `--remove` to undo. `-Individual` / `--individual` installs the mods as separate plugins. Paths are absolute, so re-run the script if you move the folder.
 
-**Install the bundle OR the individual mods, never both**, or every mod loads twice.
+**Use the installer, the bundle, OR individual mods, never a mix**, or mods load twice. The installer replaces a bundle install when you apply a selection.
 
 ## The mods
 
@@ -61,12 +74,18 @@ The scripts edit `~/.claude/settings.json` (backup: `settings.json.bak-before-mo
 
 ## Things to know
 
+- The installer writes `~/.claude/settings.json`. If Claude blocks that write, it shows a **Copy new settings.json** button so you can paste it yourself.
 - `ship-it` relies on the repo documenting its deploy steps; if none exist it tells Claude to stop and ask.
 - `where-are-we` runs `git fetch` and probes a few localhost ports at session start.
 - `cache-keeper` assumes a 60-minute cache lifetime; use its **Cache lifetime** button to switch to 5m if your plan differs. Auto is off by default.
 - `usage-guard` can warn and block but cannot show a confirm dialog.
 - If a mod fails to load, the session transcript shows a dim line naming the hook and the reason (`claude --debug` has more).
 
-## Developing
+## Adding a mod (maintainers)
 
-Each mod in `plugins/<name>` is a standalone plugin. Its hooks are top-level handler functions with names unique to the mod, and its `register` only wires them up. **`plugins/all-mods` is generated**: after editing a mod, run `.\build-bundle.ps1` (it fails if two mods declare the same top-level name) and commit the result. Validate with `claude plugin validate plugins/<name>`.
+1. Create `plugins/<name>/` as a plugin (`.claude-plugin/plugin.json`, `hooks/hooks.json`, `hooks/register.tsx`, optional `types/index.d.ts`). Keep hooks as **top-level handler functions with names unique to the mod** (prefix them, e.g. `abcSessionStart`), and keep `register` to one `on(...)` line per hook. Validate with `claude plugin validate plugins/<name>`.
+2. Add an entry to `plugins/mod-installer/catalog.json`: `id`, `name`, `summary`, `where` (what it looks like), `preview` (sample lines, optional `buttons` and `dim`), `cost`, `needs`.
+3. Run `.\build-bundle.ps1`. It regenerates `plugins/all-mods` and `.claude-plugin/marketplace.json` from the catalog, and fails if two mods declare the same top-level name.
+4. Commit and push. Everyone sees the new mod next time they run `/mods`.
+
+`plugins/mod-installer/hooks/lib.ts` holds the settings-editing logic. Tests: `node --test plugins/mod-installer/test/lib.check.ts` (Node 22+) for the logic, and `claude plugin test plugins/mod-installer` for the `/mods` pane itself (it runs against an in-memory disk, never your settings).

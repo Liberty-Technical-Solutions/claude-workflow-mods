@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # macOS/Linux setup: points Claude Code at the mods in this folder via ~/.claude/settings.json.
 # Usage:  ./setup.sh               # install the all-mods bundle (all six mods)
+#         ./setup.sh --installer   # install only the /mods installer, then pick mods inside Claude
 #         ./setup.sh --individual  # install the six mods as separate plugins instead
 #         ./setup.sh --remove      # uninstall
 # Do not mix the bundle with the individual mods: every mod would load twice.
@@ -15,8 +16,10 @@ mkdir -p "$(dirname "$SETTINGS")"
 python3 - "$HERE/plugins" "$SETTINGS" "${1:-}" <<'PY'
 import json, os, sys
 plugins, settings, flag = sys.argv[1], sys.argv[2], sys.argv[3]
-if flag == "--individual":
-    names = sorted(d for d in os.listdir(plugins) if os.path.isdir(os.path.join(plugins, d)) and d != "all-mods")
+if flag == "--installer":
+    names = ["mod-installer"]
+elif flag == "--individual":
+    names = sorted(d for d in os.listdir(plugins) if os.path.isdir(os.path.join(plugins, d)) and d not in ("all-mods", "mod-installer"))
 else:
     names = ["all-mods"]
 data = json.load(open(settings)) if os.path.exists(settings) else {}

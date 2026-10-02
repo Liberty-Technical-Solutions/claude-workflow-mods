@@ -1,14 +1,49 @@
 {
-  "name": "workflow-mods",
-  "description": "Small Claude Code mods for shipping, deploy verification, session status, usage limits and prompt-cache management.",
-  "owner": { "name": "Liberty Technical Solutions" },
-  "plugins": [
-    { "name": "all-mods", "source": "./plugins/all-mods", "description": "Everything in one install: ship-it, deploy-verifier, where-are-we, close-out-check, usage-guard and cache-keeper. Install this OR the individual mods, never both." },
-    { "name": "ship-it", "source": "./plugins/ship-it", "description": "Expands a bare 'deploy it' / 'ship it' / 'merge it' into the full commit-PR-merge-deploy-verify checklist." },
-    { "name": "deploy-verifier", "source": "./plugins/deploy-verifier", "description": "After a push/merge/deploy, shows CI status and whether the new version is actually live." },
-    { "name": "where-are-we", "source": "./plugins/where-are-we", "description": "Session-start snapshot of branch, PR, gh auth and dev servers; /where hands it to Claude." },
-    { "name": "close-out-check", "source": "./plugins/close-out-check", "description": "Flags a stale CHANGELOG, version or handoff note after a turn that changed code." },
-    { "name": "usage-guard", "source": "./plugins/usage-guard", "description": "Rate-limit usage in the status line; warns and blocks agent fan-out near a limit." },
-    { "name": "cache-keeper", "source": "./plugins/cache-keeper", "description": "Prompt-cache clock with Refresh, Compress, idle cap and a new-session guard." }
-  ]
+    "name":  "workflow-mods",
+    "description":  "Small Claude Code mods for shipping, deploy verification, session status, usage limits and prompt-cache management.",
+    "owner":  {
+                  "name":  "Liberty Technical Solutions"
+              },
+    "plugins":  [
+                    {
+                        "name":  "mod-installer",
+                        "source":  "./plugins/mod-installer",
+                        "description":  "Start here: type /mods to preview the workflow mods, tick the ones you want and install them."
+                    },
+                    {
+                        "name":  "all-mods",
+                        "source":  "./plugins/all-mods",
+                        "description":  "Everything in one install, no choices. Install this OR the individual mods, never both."
+                    },
+                    {
+                        "name":  "ship-it",
+                        "source":  "./plugins/ship-it",
+                        "description":  "A bare \"deploy it\" becomes the full ship checklist"
+                    },
+                    {
+                        "name":  "deploy-verifier",
+                        "source":  "./plugins/deploy-verifier",
+                        "description":  "After a push/merge/deploy: CI status and is the new version live"
+                    },
+                    {
+                        "name":  "where-are-we",
+                        "source":  "./plugins/where-are-we",
+                        "description":  "Session-start snapshot of branch, PR, gh sign-in and dev servers"
+                    },
+                    {
+                        "name":  "close-out-check",
+                        "source":  "./plugins/close-out-check",
+                        "description":  "Flags a stale CHANGELOG, version or handoff note after code changes"
+                    },
+                    {
+                        "name":  "usage-guard",
+                        "source":  "./plugins/usage-guard",
+                        "description":  "Rate-limit usage in the status line; guards agent fan-out"
+                    },
+                    {
+                        "name":  "cache-keeper",
+                        "source":  "./plugins/cache-keeper",
+                        "description":  "Prompt-cache clock with Refresh, Compress and an optional Auto keep-alive"
+                    }
+                ]
 }
