@@ -19,6 +19,7 @@ const miInitial: InstallerState = {
   phase: 'edit',
   plan: [],
   hasBundle: false,
+  autoUpdate: null,
   msg: '',
   snippet: null,
 }
@@ -73,6 +74,7 @@ async function miLoad($: EngineInterface) {
       phase: 'edit',
       plan: [],
       hasBundle: installed.includes(ctx.bundleId),
+      autoUpdate: json.extraKnownMarketplaces?.[catalog.marketplace] ? json.extraKnownMarketplaces[catalog.marketplace].autoUpdate === true : null,
       msg: '',
       snippet: null,
     })
@@ -134,8 +136,30 @@ async function miInstall($: EngineInterface) {
   }
 }
 
+// Cloned-folder installs: pull the latest mods from GitHub. (Marketplace installs update through Claude Code itself.)
+async function miUpdate($: EngineInterface) {
+  const s = await read($, miState)
+  if (s.ctx === null || s.ctx.mode !== 'folder') return
+  await miPatch($, { msg: 'Checking for updates…' })
+  const r = await $.process.run(['git', '-C', parentDir(s.ctx.packRoot), 'pull', '--ff-only'], { timeoutMs: 90_000 }).catch(() => null)
+  const out = r === null ? '' : [r.stdout, r.stderr].join(' ').trim()
+  await miLoad($)
+  if (r === null || r.exitCode !== 0) {
+    await miPatch($, { msg: `Could not update: ${out || 'git is not available'}. Ask whoever set this up, or run "git pull" in the mods folder.` })
+  } else if (/already up.to.date/i.test(out)) {
+    await miPatch($, { msg: 'Already up to date.' })
+  } else {
+    await miPatch($, { msg: 'Updated. Start a NEW session to load the new versions.' })
+  }
+}
+
 async function miSessionStart($: any, e: any, next: any) {
   await $.command.register({ name: 'mods', description: 'Choose which workflow mods to install' })
+  // One friendly nudge per machine, so nobody has to be told the command exists.
+  if ((await $.store.get('mod-installer.welcomed')) !== true) {
+    $.ui.toast('Workflow mods: type /mods to choose which ones to turn on.')
+    await $.store.set('mod-installer.welcomed', true)
+  }
   return next(e)
 }
 
@@ -165,10 +189,18 @@ async function miRenderPane($: any, e: any) {
       ? `Install method: folders in ${s.ctx.packRoot}`
       : `Install method: ${s.ctx.marketplace} marketplace (enabledPlugins)`
 
+  const updateText =
+    s.ctx.mode === 'folder'
+      ? 'Updates: press "Update mods now" to download the latest versions.'
+      : s.autoUpdate === true
+        ? 'Updates: automatic. New versions install by themselves when Claude Code starts.'
+        : 'Updates: not automatic yet. Press Install selected once to turn on automatic updates.'
+
   return (
     <Box flexDirection="column">
       <Text bold>Workflow mods installer</Text>
       <Text dimColor>{modeText}. Takes effect in your next new session.</Text>
+      <Text dimColor>{updateText}</Text>
       {s.hasBundle && <Text bold>! The all-mods bundle is installed. Installing a selection replaces it.</Text>}
       <Text> </Text>
 
@@ -203,6 +235,7 @@ async function miRenderPane($: any, e: any) {
           <Button key="all" label="Select all" onPress={() => miPatch($, { selected: s.catalog.mods.map((m: any) => m.id), msg: '' })} />
           <Button key="none" label="Select none" onPress={() => miPatch($, { selected: [], msg: '' })} />
           <Button key="install" label={`Install selected (${s.selected.length})`} variant="primary" onPress={() => miReview($)} />
+          {s.ctx.mode === 'folder' && <Button key="update" label="Update mods now" onPress={() => miUpdate($)} />}
         </Box>
       ) : (
         <Box flexDirection="column">

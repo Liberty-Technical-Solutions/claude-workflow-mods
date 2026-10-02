@@ -80,5 +80,9 @@ export function applySelection(settings: any, selected: string[], c: Ctx): any {
   if (!out.extraKnownMarketplaces[c.marketplace]) {
     out.extraKnownMarketplaces[c.marketplace] = { source: { source: 'github', repo: c.repo } }
   }
+  // Third-party marketplaces do not auto-update by default. Turn it on so pushed fixes reach everyone,
+  // unless the person has explicitly set it (including to false).
+  const entry = out.extraKnownMarketplaces[c.marketplace]
+  if (entry.autoUpdate === undefined) entry.autoUpdate = true
   return out
 }

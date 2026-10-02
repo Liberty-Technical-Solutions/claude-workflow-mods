@@ -1,1 +1,1 @@
-{ "name": "cache-keeper", "version": "0.1.0", "description": "Shows prompt-cache time left and context fill; Refresh keeps the cache warm, Compress shrinks context before you run out.", "types": "./types/index.d.ts" }
+{ "name": "cache-keeper", "description": "Shows prompt-cache time left and context fill; Refresh keeps the cache warm, Compress shrinks context before you run out.", "types": "./types/index.d.ts" }

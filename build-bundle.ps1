@@ -96,7 +96,7 @@ $($stateKeys -join ";`n");
 "@)
 
 Save (Join-Path $out 'hooks\hooks.json') '{ "modules": ["./register.tsx"] }'
-Save (Join-Path $out '.claude-plugin\plugin.json') ('{ "name": "all-mods", "version": "0.1.0", "description": "All ' + $mods.Count + ' workflow mods in one install: ' + ($mods -join ', ') + '.", "types": "./types/index.d.ts" }')
+Save (Join-Path $out '.claude-plugin\plugin.json') ('{ "name": "all-mods", "description": "All ' + $mods.Count + ' workflow mods in one install: ' + ($mods -join ', ') + '.", "types": "./types/index.d.ts" }')
 Write-Host "Built plugins/all-mods from: $($mods -join ', ')"
 
 # marketplace.json: the bundle, the installer, then every mod in the catalog.

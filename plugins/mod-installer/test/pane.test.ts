@@ -81,7 +81,7 @@ test('marketplace mode: confirm enables the selection through enabledPlugins', a
 
   const after = JSON.parse(files.get(SETTINGS)!)
   expect(after.enabledPlugins).toEqual({ 'x@other': true, 'cache-keeper@workflow-mods': true, 'mod-installer@workflow-mods': true })
-  expect(after.extraKnownMarketplaces['workflow-mods']).toEqual({ source: { source: 'github', repo: 'org/repo' } })
+  expect(after.extraKnownMarketplaces['workflow-mods']).toEqual({ source: { source: 'github', repo: 'org/repo' }, autoUpdate: true })
 })
 
 test('a blocked write shows a copy button instead of failing silently', async ($, on) => {
@@ -97,4 +97,24 @@ test('a blocked write shows a copy button instead of failing silently', async ($
 
   expect(await ui.find({ key: 'copy' })).toBeDefined()
   expect(files.get(SETTINGS)).toBe('{}')
+})
+
+test('folder mode: Update mods now runs git pull and reports the result', async ($, on) => {
+  const files = new Map([[SETTINGS, '{}']])
+  mock.env(on, { HOME: '/home' })
+  mock.store(on)
+  memoryDisk(on, files, true)
+  const calls: string[][] = []
+  on('process.run', ($: any, e: any) => {
+    calls.push(e.argv)
+    return { value: { exitCode: 0, stdout: 'Updating a..b, 2 files changed', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
+
+  await $.command.run({ command: 'mods', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: false } as any })
+  const ui = await $.ui.mount({ plugin: 'mod-installer', surface: 'terminal', component: 'Pane', props: TERMINAL, requestId: 'mod-installer' })
+  await ui.press({ key: 'update' })
+
+  expect(calls.some(c => c.includes('pull') && c.includes('--ff-only'))).toBe(true)
+  const text = JSON.stringify(await ui.findAll({ type: 'Text' }))
+  expect(text).toContain('Updated. Start a NEW session')
 })

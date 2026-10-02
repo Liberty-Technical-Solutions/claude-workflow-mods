@@ -1,1 +1,1 @@
-{ "name": "where-are-we", "version": "0.1.0", "description": "At session start, shows branch, dirty files, upstream changes, PR state, gh auth and dev servers in a band; /where hands the snapshot to Claude.", "types": "./types/index.d.ts" }
+{ "name": "where-are-we", "description": "At session start, shows branch, dirty files, upstream changes, PR state, gh auth and dev servers in a band; /where hands the snapshot to Claude.", "types": "./types/index.d.ts" }

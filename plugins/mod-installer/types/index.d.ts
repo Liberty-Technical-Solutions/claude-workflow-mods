@@ -33,6 +33,8 @@ export type InstallerState = {
   phase: 'edit' | 'confirm'
   plan: string[]
   hasBundle: boolean
+  /** Marketplace installs: is auto-update on for the marketplace entry (null = not added yet). */
+  autoUpdate: boolean | null
   msg: string
   snippet: string | null
 }

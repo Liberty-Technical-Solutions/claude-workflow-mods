@@ -1,1 +1,1 @@
-{ "name": "ship-it", "version": "0.1.0", "description": "Expands a bare 'deploy it' / 'ship it' / 'merge it' into the full commit-PR-merge-deploy-verify checklist." }
+{ "name": "ship-it", "description": "Expands a bare 'deploy it' / 'ship it' / 'merge it' into the full commit-PR-merge-deploy-verify checklist." }

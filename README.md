@@ -15,6 +15,8 @@ Start a new session, then type **`/mods`**. A pane lists every mod with a toggle
 
 Mods load when a session starts, so the choice takes effect in your **next new session**.
 
+**Rolling this out to a team, and how updates reach people: see [TEAM-SETUP.md](TEAM-SETUP.md)** (a copy-paste message for teammates, a zero-step settings file, and the update steps).
+
 > Marketplace loading of function-hook mods is still unverified on our side. If `/mods` is missing after a new session starts, use the setup script below.
 
 ## Install: everything, no choices

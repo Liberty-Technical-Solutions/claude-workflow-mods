@@ -56,13 +56,14 @@ test('marketplace mode: detect and apply', () => {
   const out = applySelection(s, ['cache-keeper'], market)
   // unselected catalog mods are removed (even a stale "false"); other marketplaces are untouched
   assert.deepEqual(out.enabledPlugins, { 'x@other': true, 'cache-keeper@workflow-mods': true, 'mod-installer@workflow-mods': true })
-  assert.deepEqual(out.extraKnownMarketplaces['workflow-mods'], { source: { source: 'github', repo: 'org/repo' } })
+  assert.deepEqual(out.extraKnownMarketplaces['workflow-mods'], { source: { source: 'github', repo: 'org/repo' }, autoUpdate: true })
 })
 
-test('marketplace mode: existing marketplace entry is kept', () => {
+test('marketplace mode: existing entry is kept; autoUpdate is added unless the person set it', () => {
   const s = { extraKnownMarketplaces: { 'workflow-mods': { source: { source: 'git', url: 'u' } } } }
-  const out = applySelection(s, [], market)
-  assert.deepEqual(out.extraKnownMarketplaces['workflow-mods'], { source: { source: 'git', url: 'u' } })
+  assert.deepEqual(applySelection(s, [], market).extraKnownMarketplaces['workflow-mods'], { source: { source: 'git', url: 'u' }, autoUpdate: true })
+  const off = { extraKnownMarketplaces: { 'workflow-mods': { source: { source: 'git', url: 'u' }, autoUpdate: false } } }
+  assert.equal(applySelection(off, [], market).extraKnownMarketplaces['workflow-mods'].autoUpdate, false)
 })
 
 test('plan', () => {

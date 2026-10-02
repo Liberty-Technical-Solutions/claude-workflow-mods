@@ -1,1 +1,1 @@
-{ "name": "mod-installer", "version": "0.1.0", "description": "Type /mods to preview the workflow mods, tick the ones you want and install them.", "types": "./types/index.d.ts" }
+{ "name": "mod-installer", "description": "Type /mods to preview the workflow mods, tick the ones you want and install them.", "types": "./types/index.d.ts" }
