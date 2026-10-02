@@ -1,0 +1,1 @@
+{ "name": "usage-guard", "version": "0.1.0", "description": "Keeps rate-limit usage in the status line, warns before agent fan-out near a limit, and blocks it at the edge." }
