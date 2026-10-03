@@ -49,6 +49,8 @@ export type NextSteps = {
   isLoading: boolean
   /** Indexes of the ticked options (checkboxes). Cleared whenever a new list arrives or anything is sent. */
   picked: number[]
+  /** True while the combined request is shown for a final Send or Back. */
+  isPreviewing: boolean
   /** Bumped on every new turn or prompt so a slow answer for an old turn is thrown away. */
   gen: number
 }

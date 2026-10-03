@@ -10,7 +10,7 @@ import { combineSelected, parseSuggestions, suggestPrompt, togglePick, withFallb
 // covers the case where it cannot. Cost: one small question per turn over the cached conversation (a cache read
 // plus about 100 output tokens). Turn it off with the Off button or /next.
 
-const nsStepsInit: NextSteps = { items: [], isFallback: false, isLoading: false, picked: [], gen: 0 }
+const nsStepsInit: NextSteps = { items: [], isFallback: false, isLoading: false, picked: [], isPreviewing: false, gen: 0 }
 const nsPrefsInit: NextPrefs = { isOn: true, count: 4 }
 const nsSteps = atom({ plugin: 'next-steps', key: 'steps' } as const, nsStepsInit)
 const nsPrefs = atom({ plugin: 'next-steps', key: 'prefs' } as const, nsPrefsInit)
@@ -24,7 +24,7 @@ async function nsSetPrefs($: EngineInterface, p: Partial<NextPrefs>) {
 }
 
 async function nsClear($: EngineInterface) {
-  await update($, nsSteps, s => ({ ...s, items: [], picked: [], isLoading: false, gen: s.gen + 1 }))
+  await update($, nsSteps, s => ({ ...s, items: [], picked: [], isPreviewing: false, isLoading: false, gen: s.gen + 1 }))
 }
 
 // Asks for the options. A slow answer for an old turn is discarded (gen changed).
@@ -35,13 +35,13 @@ async function nsGenerate($: EngineInterface, gen: number) {
   if (current.gen !== gen) return
   const parsed = r.isAnswered ? parseSuggestions(r.text, prefs.count) : []
   const { items, isFallback } = withFallback(parsed, prefs.count)
-  await update($, nsSteps, s => ({ ...s, items, isFallback, picked: [], isLoading: false }))
+  await update($, nsSteps, s => ({ ...s, items, isFallback, picked: [], isPreviewing: false, isLoading: false }))
   // Also offer the first one as dim ghost text in the empty box (Tab takes it).
   await $.prompt.suggest({ text: items[0] }).catch(() => {})
 }
 
 async function nsToggle($: EngineInterface, index: number) {
-  await update($, nsSteps, s => ({ ...s, picked: togglePick(s.picked, index) }))
+  await update($, nsSteps, s => ({ ...s, picked: togglePick(s.picked, index), isPreviewing: false }))
 }
 
 async function nsSelectedText($: EngineInterface) {
@@ -55,8 +55,13 @@ async function nsSend($: EngineInterface, text: string) {
   void $.prompt.submit({ text }).catch(() => {})
 }
 
-// Sends every ticked option as one request.
-async function nsSendSelected($: EngineInterface) {
+// Step 1 of Send selected: show exactly what will be sent. Nothing is sent yet.
+async function nsPreview($: EngineInterface) {
+  if (await nsSelectedText($)) await update($, nsSteps, s => ({ ...s, isPreviewing: true }))
+}
+
+// Step 2: the person confirmed the preview, so send the ticked options as one request.
+async function nsConfirmSend($: EngineInterface) {
   const text = await nsSelectedText($)
   if (text) await nsSend($, text)
 }
@@ -85,7 +90,7 @@ async function nsTurnComplete($: any, e: any, next: any) {
   const prefs = await read($, nsPrefs)
   if (prefs.isOn && e.agentId === undefined && !e.isAborted) {
     const gen = (await read($, nsSteps)).gen + 1
-    await update($, nsSteps, s => ({ ...s, items: [], picked: [], isLoading: true, gen }))
+    await update($, nsSteps, s => ({ ...s, items: [], picked: [], isPreviewing: false, isLoading: true, gen }))
     $.clock.after(nsDelayMs, () => {
       void nsGenerate($, gen).catch(() => {})
     })
@@ -107,33 +112,42 @@ async function nsRenderBand($: any, e: any, next: any) {
   const { Box, Text, Button } = $.ui.resolve(e)
   const rest = await next(e)
   const n = s.picked.length
+  const previewLines = combineSelected(s.picked.map((i: number) => s.items[i]).filter(Boolean)).split('\n')
 
   return (
     <Box flexDirection="column">
-      <Box key="ns-panel" flexDirection="column" marginTop={1} borderStyle="round" paddingX={1}>
-        <Box>
-          <Text bold>{s.isLoading ? 'Thinking about what to do next…' : 'What would you like to do next?'}</Text>
+      <Box key="ns-panel" flexDirection="column" marginTop={1} borderStyle="round" borderDimColor paddingX={1}>
+        <Box gap={2}>
+          <Text bold>{s.isLoading ? 'Thinking about what to do next…' : 'What next?'}</Text>
+          {s.items.length > 0 && <Text dimColor>{s.isFallback ? 'suggestions · ' : ''}tick one or more, then send</Text>}
           <Box flexGrow={1} />
           <Button key="ns-refresh" label="New ideas" plain dimColor onPress={() => void nsGenerate($, s.gen).catch(() => {})} />
-          <Box marginLeft={2}>
-            <Button key="ns-off" label="Off" plain dimColor onPress={() => void (async () => { await nsSetPrefs($, { isOn: false }); await nsClear($) })()} />
-          </Box>
+          <Button key="ns-off" label="Off" plain dimColor onPress={() => void (async () => { await nsSetPrefs($, { isOn: false }); await nsClear($) })()} />
         </Box>
-        {s.items.length > 0 && (
-          <Text dimColor>{s.isFallback ? 'Suggestions: ' : ''}Tick one or more, then Send. Or just type your own below.</Text>
-        )}
         {s.items.map((text: string, i: number) => {
           const isPicked = s.picked.includes(i)
           return (
-            <Box key={`ns-row-${i}`} gap={2}>
+            <Box key={`ns-row-${i}`} gap={1}>
               <Button key={`ns-pick-${i}`} label={`${isPicked ? '[x]' : '[ ]'} ${i + 1}  ${text}`} hotkey={String(i + 1)} variant={isPicked ? 'primary' : undefined} onPress={() => void nsToggle($, i)} />
               <Button key={`ns-go-${i}`} label="send" plain dimColor onPress={() => void nsSend($, text)} />
             </Box>
           )
         })}
-        {s.items.length > 0 && (
-          <Box gap={1} marginTop={1}>
-            <Button key="ns-send" label={n > 0 ? `Send selected (${n})` : 'Send selected'} hotkey="s" variant={n > 0 ? 'primary' : undefined} dimColor={n === 0} onPress={() => void nsSendSelected($)} />
+        {s.items.length > 0 && s.isPreviewing && (
+          <Box key="ns-preview" flexDirection="column" borderStyle="round" paddingX={1}>
+            <Text bold>This will be sent as one request:</Text>
+            {previewLines.map((line: string, i: number) => (
+              <Text key={`ns-pv-${i}`}>{line}</Text>
+            ))}
+            <Box gap={1}>
+              <Button key="ns-confirm" label="Send" hotkey="s" variant="primary" onPress={() => void nsConfirmSend($)} />
+              <Button key="ns-back" label="Back" onPress={() => void update($, nsSteps, st => ({ ...st, isPreviewing: false }))} />
+            </Box>
+          </Box>
+        )}
+        {s.items.length > 0 && !s.isPreviewing && (
+          <Box gap={1}>
+            <Button key="ns-send" label={n > 0 ? `Send selected (${n})` : 'Send selected'} hotkey="s" variant={n > 0 ? 'primary' : undefined} dimColor={n === 0} onPress={() => void nsPreview($)} />
             <Button key="ns-edit" label="Edit selected" dimColor={n === 0} onPress={() => void nsEditSelected($)} />
             <Button key="ns-clear" label="Clear" plain dimColor onPress={() => void update($, nsSteps, st => ({ ...st, picked: [] }))} />
           </Box>
