@@ -1,7 +1,12 @@
 {
   "marketplace": "workflow-mods",
   "repo": "Liberty-Technical-Solutions/claude-workflow-mods",
-  "legacyIds": ["where-are-we", "close-out-check", "deploy-verifier", "cache-keeper"],
+  "legacyIds": [
+    "where-are-we",
+    "close-out-check",
+    "deploy-verifier",
+    "cache-keeper"
+  ],
   "mods": [
     {
       "id": "status-strip",
@@ -9,11 +14,24 @@
       "summary": "One quiet strip: repo, docs, deploy, context and cache, each with a button",
       "where": "A strip above the prompt. Each item is a dim label with its value underneath and one button, dim until something needs doing. Cache sits on the far right with a settings dropdown. Also adds /where.",
       "preview": [
-        { "text": "repo            docs            context                                    cache" },
-        { "text": "main ±3 ↑2      current         62%                                        expired", "dim": false },
-        { "text": "[ Refresh ]     [ Fix ]         [ Compress ]               [ Refresh (full price) ] [ ⚙ ▾ ]" },
-        { "text": "Compress asks first: \"Compress this conversation?\"  [ Yes, compress ] [ Cancel ]", "dim": true },
-        { "text": "⚙ ▾ opens dropdowns: cache lifetime, keep alive, idle stop, warn level, show always or only when needed", "dim": true }
+        {
+          "text": "repo            docs            context                                    cache"
+        },
+        {
+          "text": "main ±3 ↑2      current         62%                                        expired",
+          "dim": false
+        },
+        {
+          "text": "[ Refresh ]     [ Fix ]         [ Compress ]               [ Refresh (full price) ] [ ⚙ ▾ ]"
+        },
+        {
+          "text": "Compress asks first: \"Compress this conversation?\"  [ Yes, compress ] [ Cancel ]",
+          "dim": true
+        },
+        {
+          "text": "⚙ ▾ opens dropdowns: cache lifetime, keep alive, idle stop, warn level, show always or only when needed",
+          "dim": true
+        }
       ],
       "cost": "Checking is free. Refresh and the optional Auto keep-alive read your cached context (about 10% of normal input price). Compress is one summarizing call. Auto is off by default.",
       "needs": "git for the repo and docs cells; the GitHub CLI (gh) for the deploy cell. Optional .claude/deploy-verify.json with a healthUrl."
@@ -21,14 +39,29 @@
     {
       "id": "next-steps",
       "name": "next-steps",
-      "summary": "Clickable options for what to do next, so you click instead of type",
-      "where": "A short list above the prompt after each reply. Click to send, or edit to change it first. You can still type anything.",
+      "summary": "Tick the next steps you want, instead of typing them",
+      "where": "A bordered panel above the prompt after each reply. Tick one or more options, preview what will be sent, then Send. Each row also has a one-click send. You can still type anything.",
       "preview": [
-        { "text": "next steps                                                        New ideas  Off" },
-        { "text": "[ 1  Run the tests and show me the results ]  edit", "buttons": [] },
-        { "text": "[ 2  Review what changed and point out any problems ]  edit", "dim": true },
-        { "text": "[ 3  Commit and push the changes ]  edit", "dim": true },
-        { "text": "[ 4  Update the docs and changelog for this work ]  edit", "dim": true }
+        {
+          "text": "What next?  tick one or more, then send                           New ideas  Off"
+        },
+        {
+          "text": "[x] 1  Run the tests and show me the results   send"
+        },
+        {
+          "text": "[ ] 2  Review what changed and point out any problems   send",
+          "dim": true
+        },
+        {
+          "text": "[x] 3  Commit and push the changes   send"
+        },
+        {
+          "text": "[ Send selected (2) ]  [ Edit selected ]  Clear"
+        },
+        {
+          "text": "Send selected previews first: \"Please do these in order: 1. … 2. …\"   [ Send ] [ Back ]",
+          "dim": true
+        }
       ],
       "cost": "One small request per reply to a small, fast model, using only your latest request and Claude's latest reply (a couple of thousand input tokens). Turn it off with Off or /next.",
       "needs": "Nothing. Options appear within a second or two; if the tailored ones are slow, built-in suggestions show first and are swapped in. If Claude proposed options, those come first."
@@ -39,9 +72,17 @@
       "summary": "A bare \"deploy it\" becomes the full ship checklist",
       "where": "No screen element: it adds hidden context to your prompt and shows a toast.",
       "preview": [
-        { "text": "You type:           deploy it" },
-        { "text": "Claude also reads:  Standing ship checklist: gates, version bump, PR, merge, deploy, CI, live check", "dim": true },
-        { "text": "toast:              ship-it: attached the ship checklist", "dim": true }
+        {
+          "text": "You type:           deploy it"
+        },
+        {
+          "text": "Claude also reads:  Standing ship checklist: gates, version bump, PR, merge, deploy, CI, live check",
+          "dim": true
+        },
+        {
+          "text": "toast:              ship-it: attached the ship checklist",
+          "dim": true
+        }
       ],
       "cost": "A few hundred extra tokens, only on those short deploy/merge prompts.",
       "needs": "A repo that documents its deploy steps (otherwise Claude stops and asks)."
@@ -52,9 +93,17 @@
       "summary": "Rate-limit usage in the bottom bar; guards agent fan-out",
       "where": "The bottom bar under the message box, plus a toast when an agent starts near a limit.",
       "preview": [
-        { "text": "bottom bar:   usage 5h 62% · 7d 31%" },
-        { "text": "toast (85%+): usage-guard: 5h usage at 88% — starting \"Audit sessions\"", "dim": true },
-        { "text": "blocked (97%+): new agents are refused until the limit resets", "dim": true }
+        {
+          "text": "bottom bar:   usage 5h 62% · 7d 31%"
+        },
+        {
+          "text": "toast (85%+): usage-guard: 5h usage at 88% — starting \"Audit sessions\"",
+          "dim": true
+        },
+        {
+          "text": "blocked (97%+): new agents are refused until the limit resets",
+          "dim": true
+        }
       ],
       "cost": "None.",
       "needs": "A plan that reports rate-limit usage. It may replace another status line entry."

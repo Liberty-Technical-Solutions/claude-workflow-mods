@@ -23,7 +23,7 @@
                     {
                         "name":  "next-steps",
                         "source":  "./plugins/next-steps",
-                        "description":  "Clickable options for what to do next, so you click instead of type"
+                        "description":  "Tick the next steps you want, instead of typing them"
                     },
                     {
                         "name":  "ship-it",
