@@ -30,8 +30,8 @@
         { "text": "[ 3  Commit and push the changes ]  edit", "dim": true },
         { "text": "[ 4  Update the docs and changelog for this work ]  edit", "dim": true }
       ],
-      "cost": "One small question per reply over the cached conversation (a cache read plus about 100 output tokens). Turn it off with Off or /next.",
-      "needs": "Nothing. If Claude proposed options, those come first; otherwise it suggests sensible next tasks, with a built-in list as a backstop."
+      "cost": "One small request per reply to a small, fast model, using only your latest request and Claude's latest reply (a couple of thousand input tokens). Turn it off with Off or /next.",
+      "needs": "Nothing. Options appear within a second or two; if the tailored ones are slow, built-in suggestions show first and are swapped in. If Claude proposed options, those come first."
     },
     {
       "id": "ship-it",

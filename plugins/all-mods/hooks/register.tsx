@@ -4,7 +4,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { Repo, Docs, Deploy, CacheState, Prefs, StripUi, NextSteps, NextPrefs } from '../types'
 import { CONFIRM_MS, cacheView, ctxView, deployView, docsMissing, docsView, fmtK, normCwd, parseStatus, repoView } from './status-strip-lib'
-import { combineSelected, parseSuggestions, suggestPrompt, togglePick, withFallback } from './next-steps-lib'
+import { DEFAULT_STEPS, buildSuggestPrompt, combineSelected, parseSuggestions, togglePick, withFallback } from './next-steps-lib'
 
 // ---- status-strip ----
 // One strip above the prompt: repo, docs, deploy, context ... cache. Each cell is a dim label with its value
@@ -561,17 +561,22 @@ async function ssRenderStrip($: any, e: any, next: any) {
 
 // ---- next-steps ----
 // After each turn: a short question panel of options for what to do next, with checkboxes. Tick one or more and
-// press Send selected (several are sent as one ordered request), or send a single option straight away.
-// If Claude proposed options, those come first; otherwise it suggests sensible next tasks, and a built-in list
-// covers the case where it cannot. Cost: one small question per turn over the cached conversation (a cache read
-// plus about 100 output tokens). Turn it off with the Off button or /next.
+// press Send selected (several are sent as one ordered request, after a preview), or send a single option straight
+// away. If Claude proposed options, those come first; otherwise it suggests sensible next tasks.
+//
+// Speed: it starts the moment a reply finishes and asks a small, fast model using only your latest request and
+// Claude's latest reply (not the whole conversation). If that takes more than about a second and a half, the
+// built-in suggestions appear straight away and are swapped for the tailored ones when they arrive, unless you've
+// already started ticking. Cost: one small request per reply (a couple of thousand input tokens on a small model).
+// Turn it off with the Off button or /next.
 
-const nsStepsInit: NextSteps = { items: [], isFallback: false, isLoading: false, picked: [], isPreviewing: false, gen: 0 }
+const nsStepsInit: NextSteps = { items: [], isFallback: false, isLoading: false, lastAnswer: '', picked: [], isPreviewing: false, gen: 0 }
 const nsPrefsInit: NextPrefs = { isOn: true, count: 4 }
 const nsSteps = atom({ plugin: 'all-mods', key: 'next-steps.steps' } as const, nsStepsInit)
 const nsPrefs = atom({ plugin: 'all-mods', key: 'next-steps.prefs' } as const, nsPrefsInit)
 
-const nsDelayMs = 400 // let the finished turn settle before asking
+const nsModel = 'claude-haiku-4-5-20251001' // small and fast; the reply only needs the latest exchange
+const nsStarterMs = 1500 // show the built-in suggestions if the tailored ones are not ready by then
 
 async function nsSetPrefs($: EngineInterface, p: Partial<NextPrefs>) {
   const next = { ...(await read($, nsPrefs)), ...p }
@@ -583,17 +588,44 @@ async function nsClear($: EngineInterface) {
   await update($, nsSteps, s => ({ ...s, items: [], picked: [], isPreviewing: false, isLoading: false, gen: s.gen + 1 }))
 }
 
-// Asks for the options. A slow answer for an old turn is discarded (gen changed).
+// The user's latest request, for context. Best effort: without it the reply alone is enough.
+async function nsLatestRequest($: EngineInterface) {
+  try {
+    const messages = await $.session.messages()
+    if (Array.isArray(messages)) {
+      for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i].role === 'user' && messages[i].text) return messages[i].text
+      }
+    }
+  } catch {
+    // no history available: carry on with the reply alone
+  }
+  return ''
+}
+
+// Asks the small model for the options. A slow answer for an old turn is discarded (gen changed), and an answer
+// never replaces a list you have already started ticking.
 async function nsGenerate($: EngineInterface, gen: number) {
   const prefs = await read($, nsPrefs)
-  const r = await $.model.fork({ prompt: suggestPrompt(prefs.count) })
+  const before = await read($, nsSteps)
+  const prompt = buildSuggestPrompt(await nsLatestRequest($), before.lastAnswer, prefs.count)
+  const r = await $.model.complete({ model: nsModel, prompt, maxTokens: 220 }).catch(() => null)
   const current = await read($, nsSteps)
   if (current.gen !== gen) return
-  const parsed = r.isAnswered ? parseSuggestions(r.text, prefs.count) : []
+  if (current.items.length > 0 && current.picked.length > 0) return
+  const parsed = r !== null && r.isAnswered ? parseSuggestions(r.text, prefs.count) : []
   const { items, isFallback } = withFallback(parsed, prefs.count)
   await update($, nsSteps, s => ({ ...s, items, isFallback, picked: [], isPreviewing: false, isLoading: false }))
   // Also offer the first one as dim ghost text in the empty box (Tab takes it).
   await $.prompt.suggest({ text: items[0] }).catch(() => {})
+}
+
+// If the tailored options are not ready yet, show the built-in ones now so there is always something to click.
+async function nsShowStarter($: EngineInterface, gen: number) {
+  const current = await read($, nsSteps)
+  if (current.gen !== gen || current.items.length > 0) return
+  const prefs = await read($, nsPrefs)
+  await update($, nsSteps, s => ({ ...s, items: DEFAULT_STEPS.slice(0, prefs.count), isFallback: true, picked: [] }))
 }
 
 async function nsToggle($: EngineInterface, index: number) {
@@ -646,9 +678,11 @@ async function nsTurnComplete($: any, e: any, next: any) {
   const prefs = await read($, nsPrefs)
   if (prefs.isOn && e.agentId === undefined && !e.isAborted) {
     const gen = (await read($, nsSteps)).gen + 1
-    await update($, nsSteps, s => ({ ...s, items: [], picked: [], isPreviewing: false, isLoading: true, gen }))
-    $.clock.after(nsDelayMs, () => {
-      void nsGenerate($, gen).catch(() => {})
+    // No "thinking" state and no delay: start now, and show the built-in options if it is slow.
+    await update($, nsSteps, s => ({ ...s, items: [], picked: [], isPreviewing: false, isLoading: false, lastAnswer: String(e.answer ?? ''), gen }))
+    void nsGenerate($, gen).catch(() => {})
+    $.clock.after(nsStarterMs, () => {
+      void nsShowStarter($, gen).catch(() => {})
     })
   }
   return next(e)
@@ -663,7 +697,7 @@ async function nsPromptSubmit($: any, e: any, next: any) {
 async function nsRenderBand($: any, e: any, next: any) {
   const s = await read($, nsSteps)
   const prefs = await read($, nsPrefs)
-  if (e.props.hasSurvey || !prefs.isOn || (s.items.length === 0 && !s.isLoading)) return next(e)
+  if (e.props.hasSurvey || !prefs.isOn || s.items.length === 0) return next(e)
 
   const { Box, Text, Button } = $.ui.resolve(e)
   const rest = await next(e)
@@ -674,7 +708,7 @@ async function nsRenderBand($: any, e: any, next: any) {
     <Box flexDirection="column">
       <Box key="ns-panel" flexDirection="column" marginTop={1} borderStyle="round" borderDimColor paddingX={1}>
         <Box gap={2}>
-          <Text bold>{s.isLoading ? 'Thinking about what to do next…' : 'What next?'}</Text>
+          <Text bold>What next?</Text>
           {s.items.length > 0 && <Text dimColor>{s.isFallback ? 'suggestions · ' : ''}tick one or more, then send</Text>}
           <Box flexGrow={1} />
           <Button key="ns-refresh" label="New ideas" plain dimColor onPress={() => void nsGenerate($, s.gen).catch(() => {})} />

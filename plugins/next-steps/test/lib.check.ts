@@ -44,3 +44,16 @@ test('togglePick: adds, removes, keeps display order', () => {
   assert.deepEqual(togglePick([2], 0), [0, 2])
   assert.deepEqual(togglePick([0, 2], 2), [0])
 })
+
+test('buildSuggestPrompt: carries the latest exchange, truncates long replies from the front', async () => {
+  const { buildSuggestPrompt } = await import('../hooks/lib.ts')
+  const p = buildSuggestPrompt('Add a login page', 'I added it. Next: tests.', 3)
+  assert.match(p, /Add a login page/)
+  assert.match(p, /I added it\. Next: tests\./)
+  assert.match(p, /up to 3/)
+  assert.match(p, /latest reply proposed options/)
+  const long = buildSuggestPrompt('x', 'A'.repeat(5000) + 'END', 3)
+  assert.match(long, /…A+END/)
+  assert.ok(long.length < 5200)
+  assert.match(buildSuggestPrompt('', '', 3), /\(not available\)/)
+})

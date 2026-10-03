@@ -47,6 +47,8 @@ export type NextSteps = {
   /** True when the model gave nothing usable and the built-in list is showing. */
   isFallback: boolean
   isLoading: boolean
+  /** The assistant's latest reply, kept so the suggestions can be written from it quickly. */
+  lastAnswer: string
   /** Indexes of the ticked options (checkboxes). Cleared whenever a new list arrives or anything is sent. */
   picked: number[]
   /** True while the combined request is shown for a final Send or Back. */

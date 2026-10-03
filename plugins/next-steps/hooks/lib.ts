@@ -63,3 +63,23 @@ export function combineSelected(items: string[]): string {
 export function togglePick(picked: number[], index: number): number[] {
   return (picked.includes(index) ? picked.filter(i => i !== index) : [...picked, index]).sort((a, b) => a - b)
 }
+
+export const MAX_USER_CHARS = 1500
+export const MAX_ANSWER_CHARS = 3500
+
+const tail = (text: string, max: number) => (text.length > max ? '…' + text.slice(text.length - max) : text)
+
+/** The prompt for the fast model: the latest exchange (not the whole conversation) plus the ask. */
+export function buildSuggestPrompt(userText: string, answer: string, count: number): string {
+  return [
+    'You are helping choose what to do next in a coding session. Here is the latest exchange.',
+    '',
+    "The user's latest request:",
+    tail(userText.trim(), MAX_USER_CHARS) || '(not available)',
+    '',
+    "The assistant's latest reply:",
+    tail(answer.trim(), MAX_ANSWER_CHARS) || '(not available)',
+    '',
+    suggestPrompt(count).replace('If your last message proposed options', 'If the latest reply proposed options'),
+  ].join('\n')
+}

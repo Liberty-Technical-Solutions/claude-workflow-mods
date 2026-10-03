@@ -58,7 +58,7 @@ The scripts edit `~/.claude/settings.json` (backup: `settings.json.bak-before-mo
 | Mod | What it does | Uses tokens? |
 |---|---|---|
 | `status-strip` | One quiet strip above the prompt: repo, docs, deploy, context and cache. Each is a dim label with its value underneath and one button (dim until something needs doing). **Compress** asks for confirmation first. The cache **⚙ ▾** dropdown sets lifetime, keep-alive, idle stop and warn level once. Also adds `/where` | Checking is free. Refresh and Auto keep-alive read the cached context (~10% price); Compress is one summarizing call. Auto is off by default |
-| `next-steps` | After each reply, a few clickable options for what to do next (click to send, or **edit** first). Uses what Claude proposed, otherwise suggests sensible next tasks, with a built-in list as a backstop. `/next` turns it off | One small question per reply over the cached conversation (a cache read plus ~100 output tokens) |
+| `next-steps` | After each reply, a few clickable options for what to do next (click to send, or **edit** first). Uses what Claude proposed, otherwise suggests sensible next tasks, with a built-in list as a backstop. `/next` turns it off | One small request per reply to a small, fast model with just your latest request and Claude's reply (about a couple of thousand input tokens) |
 | `ship-it` | A bare "deploy it" / "ship it" / "merge it" gets the full commit-PR-merge-deploy-verify checklist attached (hidden context) | A few hundred extra tokens on those prompts only |
 | `usage-guard` | Rate-limit usage in the bottom bar; toast at 85%, blocks new agents at 97% | No |
 
@@ -80,7 +80,7 @@ The scripts edit `~/.claude/settings.json` (backup: `settings.json.bak-before-mo
 - `ship-it` relies on the repo documenting its deploy steps; if none exist it tells Claude to stop and ask.
 - `/where` runs `git fetch` and probes a few localhost ports.
 - `status-strip` assumes a 60-minute cache lifetime; change it in the **⚙ ▾** dropdown if your plan differs. Auto keep-alive is off by default, stops after 8 idle hours, and pauses when a newer session opens in the same folder.
-- `next-steps` costs one small request per reply; turn it off with **Off** or `/next` if you would rather not.
+- `next-steps` starts the moment a reply finishes and uses a small, fast model with only the latest exchange. If it takes more than about a second and a half, built-in suggestions show first and the tailored ones replace them (unless you've started ticking). It costs one small request per reply; turn it off with **Off** or `/next`. If the small model isn't available on your plan, you simply keep the built-in suggestions.
 - `usage-guard` can warn and block but cannot show a confirm dialog.
 - If a mod fails to load, the session transcript shows a dim line naming the hook and the reason (`claude --debug` has more).
 

@@ -22,7 +22,7 @@ function world(on: any) {
   })
   on('command.register', () => ({ value: undefined }))
   on('ui.status', () => ({ value: undefined }))
-  on('model.fork', () => ({ value: { isAnswered: true, text: '["Run the tests", "Commit and push"]', usage: USAGE } }))
+  on('model.complete', () => ({ value: { isAnswered: true, text: '["Run the tests", "Commit and push"]', usage: USAGE } }))
   on('prompt.suggest', () => ({ value: { isShown: true } }))
   on('prompt.submit', ($: any, e: any) => {
     sent.push(e.text)

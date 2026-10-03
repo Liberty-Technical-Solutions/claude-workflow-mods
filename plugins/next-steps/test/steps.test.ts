@@ -4,13 +4,25 @@ import { expect, mock, test } from 'claude-code/testing'
 const PROPS = { hasSurvey: false, bodyColumns: 100 } as any
 const USAGE = { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 1, cache_creation_input_tokens: 0 }
 
-function world(on: any, reply: string | null) {
+// `slow`: the model answers only once the test calls release(), to exercise the "show the built-in options first" path.
+function world(on: any, reply: string | null, slow = false) {
   const sent: string[] = []
   const filled: string[] = []
   const suggested: string[] = []
+  const prompts: string[] = []
+  const models: string[] = []
+  let release: () => void = () => {}
+  const gate = new Promise<void>(resolve => {
+    release = resolve
+  })
   on('session.start', ($: any, e: any) => ({ cwd: e.cwd }))
   on('command.register', () => ({ value: undefined }))
-  on('model.fork', () => ({ value: reply === null ? { isAnswered: false, reason: 'api-error', usage: USAGE } : { isAnswered: true, text: reply, usage: USAGE } }))
+  on('model.complete', async ($: any, e: any) => {
+    prompts.push(e.prompt)
+    models.push(e.model)
+    if (slow) await gate
+    return { value: reply === null ? { isAnswered: false, reason: 'api-error', usage: USAGE } : { isAnswered: true, text: reply, usage: USAGE } }
+  })
   on('prompt.suggest', ($: any, e: any) => {
     suggested.push(e.text)
     return { value: { isShown: true } }
@@ -28,12 +40,12 @@ function world(on: any, reply: string | null) {
     const { Box } = $.ui.resolve(e)
     return (globalThis as any).h(Box, {})
   })
-  return { sent, filled, suggested }
+  return { sent, filled, suggested, prompts, models, release }
 }
 
-async function replyDone($: any, clock: any) {
-  await $.turn.complete({ answer: 'done', durationMs: 1, isAborted: false, turnId: 't1' } as any)
-  await clock.advance(1000)
+async function replyDone($: any, clock: any, answer = 'done', ms = 1000) {
+  await $.turn.complete({ answer, durationMs: 1, isAborted: false, turnId: 't1' } as any)
+  await clock.advance(ms)
 }
 
 test('options appear as checkboxes; ticking several and pressing Send selected sends one ordered request', async ($, on) => {
@@ -148,4 +160,53 @@ test('Off hides the options and stops asking', async ($, on) => {
   await replyDone($, clock)
   await ui.redraw()
   expect(await ui.find({ key: 'ns-pick-0' })).toBeUndefined()
+})
+
+test('it asks the small fast model, using only the latest reply', async ($, on) => {
+  mock.store(on)
+  const clock = mock.clock(on, { now: 1_000 })
+  const w = world(on, '["Run the tests"]')
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+  await $.ui.mount({ plugin: 'next-steps', surface: 'terminal', component: 'AbovePrompt', props: PROPS })
+  await replyDone($, clock, 'I added the login page. Next I could add tests.')
+  expect(w.models).toEqual(['claude-haiku-4-5-20251001'])
+  expect(w.prompts[0]).toContain('I added the login page.')
+  expect(w.prompts[0]).not.toContain('Thinking')
+})
+
+test('slow model: built-in options show after 1.5s, then the tailored ones replace them', async ($, on) => {
+  mock.store(on)
+  const clock = mock.clock(on, { now: 1_000 })
+  const w = world(on, '["Add a login test", "Deploy to staging"]', true)
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount({ plugin: 'next-steps', surface: 'terminal', component: 'AbovePrompt', props: PROPS })
+
+  await replyDone($, clock, 'done', 1000) // under 1.5s: nothing yet, and no "Thinking" text
+  await ui.redraw()
+  expect(await ui.find({ key: 'ns-pick-0' })).toBeUndefined()
+  expect(JSON.stringify(await ui.findAll({ type: 'Text' }))).not.toContain('Thinking')
+
+  await clock.advance(1000) // past 1.5s: the built-in options appear
+  await ui.redraw()
+  expect((await ui.find({ key: 'ns-pick-0' }))?.props.label).toBe('[ ] 1  Run the tests and show me the results')
+
+  w.release() // the tailored answer arrives
+  await clock.advance(10)
+  await ui.redraw()
+  expect((await ui.find({ key: 'ns-pick-0' }))?.props.label).toBe('[ ] 1  Add a login test')
+})
+
+test('a tailored answer never replaces a list you have started ticking', async ($, on) => {
+  mock.store(on)
+  const clock = mock.clock(on, { now: 1_000 })
+  const w = world(on, '["Add a login test"]', true)
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount({ plugin: 'next-steps', surface: 'terminal', component: 'AbovePrompt', props: PROPS })
+  await replyDone($, clock, 'done', 2000)
+  await ui.redraw()
+  await ui.press({ key: 'ns-pick-0' })
+  w.release()
+  await clock.advance(10)
+  await ui.redraw()
+  expect((await ui.find({ key: 'ns-pick-0' }))?.props.label).toBe('[x] 1  Run the tests and show me the results')
 })
