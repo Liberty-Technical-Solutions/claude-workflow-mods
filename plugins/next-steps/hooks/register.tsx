@@ -2,9 +2,9 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { NextPrefs, NextSteps } from '../types'
-import { DEFAULT_STEPS, buildSuggestPrompt, combineSelected, parseSuggestions, togglePick, withFallback } from './lib'
+import { DEFAULT_STEPS, START_STEPS, buildSuggestPrompt, combineSelected, parseSuggestions, togglePick, withFallback } from './lib'
 
-// After each turn: a short question panel of options for what to do next, with checkboxes. Tick one or more and
+// Whenever nothing is running (a fresh session, after a reply, after a stopped reply): a short question panel of options for what to do next, with checkboxes. Tick one or more and
 // press Send selected (several are sent as one ordered request, after a preview), or send a single option straight
 // away. If Claude proposed options, those come first; otherwise it suggests sensible next tasks.
 //
@@ -104,10 +104,18 @@ async function nsEditSelected($: EngineInterface) {
   if (text) await $.prompt.fill({ text, mode: 'replace' }).catch(() => {})
 }
 
+// Whenever nothing is running there should be something to click: show these straight away (no model call).
+async function nsShowIdle($: EngineInterface, steps: string[]) {
+  const prefs = await read($, nsPrefs)
+  if (!prefs.isOn) return
+  await update($, nsSteps, s => ({ ...s, items: steps.slice(0, prefs.count), isFallback: true, picked: [], isPreviewing: false, gen: s.gen + 1 }))
+}
+
 async function nsSessionStart($: any, e: any, next: any) {
   const saved = (await $.store.get('next-steps.prefs')) as Partial<NextPrefs> | undefined
   if (saved && typeof saved === 'object') await update($, nsPrefs, p => ({ ...p, ...saved }))
   await $.command.register({ name: 'next', description: 'Turn clickable next-step suggestions on or off' })
+  await nsShowIdle($, START_STEPS) // a fresh or resumed session is idle: offer starting points right away
   return next(e)
 }
 
@@ -115,11 +123,14 @@ async function nsCommandNext($: any) {
   const prefs = await read($, nsPrefs)
   await nsSetPrefs($, { isOn: !prefs.isOn })
   if (prefs.isOn) await nsClear($)
-  return { text: prefs.isOn ? 'Next-step suggestions are off. Type /next to turn them back on.' : 'Next-step suggestions are on. They appear after each reply.' }
+  else await nsShowIdle($, START_STEPS)
+  return { text: prefs.isOn ? 'Next-step suggestions are off. Type /next to turn them back on.' : 'Next-step suggestions are on. They show whenever nothing is running.' }
 }
 
 async function nsTurnComplete($: any, e: any, next: any) {
   const prefs = await read($, nsPrefs)
+  // A stopped reply (Esc) leaves the session idle too: there is no finished reply to build on, so offer the basics.
+  if (prefs.isOn && e.agentId === undefined && e.isAborted) await nsShowIdle($, DEFAULT_STEPS)
   if (prefs.isOn && e.agentId === undefined && !e.isAborted) {
     const gen = (await read($, nsSteps)).gen + 1
     // No "thinking" state and no delay: start now, and show the built-in options if it is slow.

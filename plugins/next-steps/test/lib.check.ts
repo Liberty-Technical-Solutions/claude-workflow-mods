@@ -57,3 +57,9 @@ test('buildSuggestPrompt: carries the latest exchange, truncates long replies fr
   assert.ok(long.length < 5200)
   assert.match(buildSuggestPrompt('', '', 3), /\(not available\)/)
 })
+
+test('START_STEPS: four distinct starting points', async () => {
+  const { START_STEPS } = await import('../hooks/lib.ts')
+  assert.equal(START_STEPS.length, 4)
+  assert.equal(new Set(START_STEPS).size, 4)
+})

@@ -10,6 +10,14 @@ export const DEFAULT_STEPS = [
   'Update the docs and changelog for this work',
 ]
 
+/** Shown when a session is idle and nothing has been said yet (a fresh or resumed session). */
+export const START_STEPS = [
+  'Show me where this project stands and what is left',
+  'Review the most recent changes',
+  'Run the tests and show me the results',
+  'Pick up where we left off last time',
+]
+
 export function suggestPrompt(count: number): string {
   return [
     `Suggest up to ${count} things the user might want to do next in this session.`,

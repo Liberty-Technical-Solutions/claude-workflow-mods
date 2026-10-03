@@ -40,7 +40,7 @@
       "id": "next-steps",
       "name": "next-steps",
       "summary": "Tick the next steps you want, instead of typing them",
-      "where": "A bordered panel above the prompt after each reply. Tick one or more options, preview what will be sent, then Send. Each row also has a one-click send. You can still type anything.",
+      "where": "A bordered panel above the prompt whenever nothing is running: at the start of a session, after each reply, and after a stopped reply. Tick one or more options, preview what will be sent, then Send. Each row also has a one-click send. You can still type anything.",
       "preview": [
         {
           "text": "What next?  tick one or more, then send                           New ideas  Off"
