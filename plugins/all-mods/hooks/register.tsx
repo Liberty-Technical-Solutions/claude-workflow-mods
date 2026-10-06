@@ -2,15 +2,46 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Repo, Docs, Deploy, CacheState, Prefs, StripUi, NextSteps, NextPrefs } from '../types'
-import { CONFIRM_MS, cacheView, ctxView, deployKind, deployView, docsMissing, docsView, fmtClock, fmtK, normCwd, parseStatus, repoView } from './status-strip-lib'
+import type { Repo, Docs, Deploy, Ship, ProfileState, CacheState, Prefs, StripUi, NextSteps, NextPrefs } from '../types'
+import {
+  CONFIRM_MS,
+  advanceShip,
+  cacheView,
+  ctxView,
+  deployKind,
+  deployView,
+  docsMissing,
+  docsView,
+  finishShip,
+  fmtClock,
+  fmtElapsed,
+  fmtK,
+  fmtLeft,
+  isShipRequest,
+  newShip,
+  normCwd,
+  parseProfile,
+  parseStatus,
+  repoView,
+  shipView,
+  shouldWarnCache,
+  showCell,
+  stepForCommand,
+  stepForEdit,
+} from './status-strip-lib'
 import { DEFAULT_STEPS, START_STEPS, buildSuggestPrompt, combineSelected, parseSuggestions, togglePick, withFallback } from './next-steps-lib'
+import { ugLabel, ugSummarize, ugWorst } from './usage-guard-lib'
 
 // ---- status-strip ----
-// One strip above the prompt: repo, docs, deploy, context ... cache. Each cell is a dim label with its value
-// underneath and one button. Buttons are dim when nothing needs doing and bright when something does.
+// One strip above the prompt: repo, docs, deploy, context ... cache. Each cell is a dim label, its value and one
+// button, on one line. Buttons are dim when nothing needs doing and bright when something does.
+//   - Quiet dock: when everything is fine it shrinks to one thin line, and opens when something needs you.
+//   - Meters: context and cache show a small circle (○ ◔ ◑ ◕ ●) beside the number.
+//   - Ship stepper: a "deploy it" request is followed step by step, with a timer per step.
+//   - Heads-ups: cache about to expire, context filling up, deploy or ship finished appear once as a short message.
 //
 // Optional per-repo files:
+//   .claude/mods.json           { "cells": ["repo", "docs", "deploy", "context", "cache"], "show": "dock" }
 //   .claude/deploy-verify.json  { "healthUrl": "https://app/api/health", "versionField": "version", "versionFile": "package.json" }
 //   .claude/where.json          { "ports": [3000, 8347], "docs": ["HANDOFF.md"] }   (used by /where)
 
@@ -28,12 +59,15 @@ const ssCacheInit: CacheState = {
   resumedAt: null,
   now: 0,
 }
-const ssPrefsInit: Prefs = { ttlMin: 60, isAuto: false, idleHours: 8, warnMin: 10, showMode: 'always' }
-const ssUiInit: StripUi = { menu: false, confirm: false, armedAt: null, msg: '' }
+const ssPrefsInit: Prefs = { ttlMin: 60, isAuto: false, idleHours: 8, warnMin: 10, showMode: 'dock', toasts: true }
+const ssUiInit: StripUi = { menu: false, confirm: false, armedAt: null, msg: '', isOpen: false }
+const ssProfileInit: ProfileState = { cells: null, show: null }
 
 const ssRepo = atom({ plugin: 'all-mods', key: 'status-strip.repo' } as const, ssRepoInit)
 const ssDocs = atom({ plugin: 'all-mods', key: 'status-strip.docs' } as const, null)
 const ssDeploy = atom({ plugin: 'all-mods', key: 'status-strip.deploy' } as const, null)
+const ssShip = atom({ plugin: 'all-mods', key: 'status-strip.ship' } as const, null)
+const ssProfile = atom({ plugin: 'all-mods', key: 'status-strip.profile' } as const, ssProfileInit)
 const ssCache = atom({ plugin: 'all-mods', key: 'status-strip.cache' } as const, ssCacheInit)
 const ssPrefs = atom({ plugin: 'all-mods', key: 'status-strip.prefs' } as const, ssPrefsInit)
 const ssUi = atom({ plugin: 'all-mods', key: 'status-strip.ui' } as const, ssUiInit)
@@ -60,6 +94,12 @@ let ssIsBusy = false
 let ssSessionId = ''
 let ssSessionCwd = ''
 let ssStartedAt = 0
+// Heads-ups are shown once: these remember what has already been announced.
+let ssToastCacheFill: number | null = null
+let ssToastCtxFull = false
+let ssToastDeployFor = -1
+let ssToastShipFor = -1
+const ssShipKeepMs = 10 * 60_000 // a finished ship stays visible this long unless dismissed
 
 async function ssPatchCache($: EngineInterface, p: Partial<CacheState>) {
   await update($, ssCache, c => ({ ...c, ...p }))
@@ -79,6 +119,79 @@ async function ssSetPrefs($: EngineInterface, p: Partial<Prefs>) {
 async function ssLoadPrefs($: EngineInterface) {
   const saved = (await $.store.get('status-strip.prefs')) as Partial<Prefs> | undefined
   if (saved && typeof saved === 'object') await update($, ssPrefs, p => ({ ...p, ...saved }))
+}
+
+// The repo's own preferences for the strip (.claude/mods.json). Read again on every beat so edits apply live.
+async function ssLoadProfile($: EngineInterface) {
+  let text: string | null = null
+  try {
+    if (await $.fs.exists('.claude/mods.json')) text = String(await $.fs.read('.claude/mods.json'))
+  } catch {
+    text = null
+  }
+  const profile = parseProfile(text)
+  await update($, ssProfile, () => profile)
+}
+
+// ---- ship stepper ------------------------------------------------------------------------------------------------
+
+async function ssShipStart($: EngineInterface) {
+  const now = await $.clock.now()
+  await update($, ssShip, () => newShip(now))
+}
+
+async function ssShipAdvance($: EngineInterface, step: number) {
+  const now = await $.clock.now()
+  const current = await read($, ssShip)
+  // A merge or deploy command with no "deploy it" request still deserves a stepper.
+  const base = current === null || !current.isActive ? (step >= 3 ? newShip(now) : null) : current
+  if (base === null) return
+  await update($, ssShip, () => advanceShip(base, step, now))
+}
+
+async function ssShipFinish($: EngineInterface, failed: boolean) {
+  const now = await $.clock.now()
+  await update($, ssShip, s => (s === null ? s : finishShip(s, now, failed)))
+}
+
+// ---- heads-ups ---------------------------------------------------------------------------------------------------
+
+// One short message the first time something needs you. The strip stays quiet; this is what taps you on the shoulder.
+async function ssHeadsUp($: EngineInterface) {
+  const prefs = await read($, ssPrefs)
+  if (!prefs.toasts) return
+  const c = await read($, ssCache)
+
+  if (c.lastApiAt !== null) {
+    const left = prefs.ttlMin * 60_000 - (c.now - c.lastApiAt)
+    if (shouldWarnCache(left, prefs.warnMin * 60_000, ssToastCacheFill, c.lastApiAt)) {
+      ssToastCacheFill = c.lastApiAt
+      $.ui.toast(`Cache expires in ${fmtLeft(left)}. Press Refresh on the strip to keep it warm.`)
+    }
+  }
+
+  const ctx = ctxView(c)
+  if (ctx.needs && !ssToastCtxFull) {
+    ssToastCtxFull = true
+    $.ui.toast(`Context is ${ctx.text} full. Compress at a good stopping point.`)
+  } else if (!ctx.needs) {
+    ssToastCtxFull = false
+  }
+
+  const deploy = await read($, ssDeploy)
+  if (deploy !== null && deploy.endedAt !== null && ssToastDeployFor !== deploy.startedAt) {
+    ssToastDeployFor = deploy.startedAt
+    const took = fmtElapsed(deploy.endedAt - deploy.startedAt)
+    if (deploy.ci === 'failed') $.ui.toast(`✘ The ${deploy.kind} failed after ${took}${deploy.note ? `: ${deploy.note}` : ''}.`)
+    else $.ui.toast(`✔ The ${deploy.kind} finished in ${took}${deploy.live && deploy.live === deploy.expected ? ` · v${deploy.live} is live` : ''}.`)
+  }
+
+  const ship = await read($, ssShip)
+  if (ship !== null && ship.endedAt !== null && ssToastShipFor !== ship.startedAt) {
+    ssToastShipFor = ship.startedAt
+    const took = fmtElapsed(ship.endedAt - ship.startedAt)
+    $.ui.toast(ship.failed ? `✘ Shipping stopped after ${took}.` : `✔ Shipped in ${took}.`)
+  }
 }
 
 async function ssRun($: EngineInterface, argv: string[], timeoutMs = 15_000) {
@@ -190,6 +303,7 @@ async function ssDeployPoll($: EngineInterface) {
   next.isDone = (ciFinal && versionOk) || now - current.startedAt > ssPollGiveUpMs
   if (next.isDone) next.endedAt = now
   await update($, ssDeploy, d => (d ? { ...d, ...next } : d))
+  if (next.isDone) await ssShipFinish($, next.ci === 'failed') // the watch ending is the end of shipping too
 }
 
 // Reads context fill and stamps the clock; the redraw follows from the state write.
@@ -279,8 +393,13 @@ async function ssTick($: EngineInterface) {
   await ssSample($)
   await ssRepoRefresh($)
   await ssDeployPoll($)
+  await ssLoadProfile($).catch(() => {})
   const now = await $.clock.now()
   await ssHeartbeat($, now)
+
+  const ship = await read($, ssShip)
+  if (ship !== null && ship.endedAt !== null && now - ship.endedAt > ssShipKeepMs) await update($, ssShip, () => null)
+  await ssHeadsUp($).catch(() => {})
 
   const ui = await read($, ssUi)
   if (ui.confirm && ui.armedAt !== null && now - ui.armedAt > CONFIRM_MS) await ssPatchUi($, { confirm: false, armedAt: null })
@@ -357,6 +476,7 @@ async function ssWhereText($: EngineInterface) {
 
 async function ssSessionStart($: any, e: any, next: any) {
   await ssLoadPrefs($)
+  await ssLoadProfile($).catch(() => {})
   ssSessionId = await $.session.id()
   ssSessionCwd = e.cwd
   ssStartedAt = await $.clock.now()
@@ -411,7 +531,29 @@ async function ssToolCallBash($: any, e: any, next: any) {
     }))
     void ssDeployPoll($).catch(() => {})
   }
+  if (ran.deny === undefined && ran.isError !== true) {
+    const ship = await read($, ssShip)
+    const step = stepForCommand(e.command, ship?.current ?? -1)
+    if (step !== null) await ssShipAdvance($, step)
+  }
   return ran
+}
+
+// Editing the changelog or package.json is the "version" step of shipping.
+async function ssToolCallEdit($: any, e: any, next: any) {
+  const ran = await next(e)
+  if (ran.deny === undefined && ran.isError !== true) {
+    const step = stepForEdit(String(e.file_path ?? e.path ?? ''))
+    const ship = await read($, ssShip)
+    if (step !== null && ship !== null && ship.isActive) await ssShipAdvance($, step)
+  }
+  return ran
+}
+
+// A "deploy it" request starts the ship stepper.
+async function ssPromptSubmit($: any, e: any, next: any) {
+  if (isShipRequest(String(e.text ?? ''))) await ssShipStart($)
+  return next(e)
 }
 
 async function ssCommandWhere($: any) {
@@ -423,6 +565,7 @@ async function ssCommandWhere($: any) {
 async function ssRenderStrip($: any, e: any, next: any) {
   if (e.props.hasSurvey) return next(e)
 
+  const profile = await read($, ssProfile)
   const repo = repoView(await read($, ssRepo))
   const docs = docsView(await read($, ssDocs))
   const c = await read($, ssCache)
@@ -433,11 +576,20 @@ async function ssRenderStrip($: any, e: any, next: any) {
   const cache = cacheView(c, prefs)
   const rawDeploy = await read($, ssDeploy)
   const rawDocs = await read($, ssDocs)
+  const ship = await read($, ssShip)
   const isArmed = ui.confirm && ui.armedAt !== null && c.now - ui.armedAt < CONFIRM_MS
 
-  const needsAny = repo.needs || docs.needs || (deploy?.needs ?? false) || ctx.needs || cache.needs
-  const isExtraOpen = ui.menu || isArmed || c.halted !== null
-  if (prefs.showMode === 'needed' && !needsAny && !isExtraOpen) return next(e)
+  // This repo's .claude/mods.json can hide cells and pick the mode; otherwise the saved preference applies.
+  const has = (id: string) => showCell(profile, id)
+  const mode = profile.show ?? prefs.showMode
+  const needsAny =
+    (has('repo') && repo.needs) || (has('docs') && docs.needs) || (has('deploy') && (deploy?.needs ?? false)) || (has('context') && ctx.needs) || (has('cache') && cache.needs)
+  const isBusyShipping = (rawDeploy !== null && !rawDeploy.isDone) || (ship !== null && ship.isActive)
+  const isExtraOpen = ui.menu || isArmed || c.halted !== null || isBusyShipping
+  if (mode === 'needed' && !needsAny && !isExtraOpen) return next(e)
+  // The quiet dock: one thin line while everything is fine; opens by itself when something needs you.
+  const canCollapse = mode === 'dock' && !needsAny && !isExtraOpen
+  const isCollapsed = canCollapse && !ui.isOpen
 
   const { Box, Text, Button, Select } = $.ui.resolve(e)
   const toneColor = (t: string) => (t === 'warning' || t === 'error' || t === 'success' ? t : undefined)
@@ -467,24 +619,56 @@ async function ssRenderStrip($: any, e: any, next: any) {
     </Box>
   )
 
+  // The small circle goes beside the number: context fills up, the cache circle shows lifetime LEFT.
+  const withRing = (v: { text: string; tone: string; ring?: string }) => ({ ...v, text: v.ring ? `${v.ring} ${v.text}` : v.text })
+
+  if (isCollapsed) {
+    const bits = [has('repo') && repo.text, has('context') && withRing(ctx).text, has('cache') && withRing(cache).text].filter(Boolean)
+    return (
+      <Box flexDirection="column">
+        <Box key="ss-dock" gap={1}>
+          <Button key="ss-dock-open" label="▸" plain dimColor onPress={() => void ssPatchUi($, { isOpen: true })} />
+          <Text dimColor>{bits.join(' · ')}</Text>
+        </Box>
+        {rest}
+      </Box>
+    )
+  }
+
   return (
     <Box flexDirection="column">
       <Box columnGap={2} flexWrap="wrap">
-        {cell('repo', 'repo', repo, null)}
-        {cell('docs', 'docs', docs, btn('ss-docs', 'Fix', docs.needs, () => void ssFixDocs($)))}
-        {deploy && cell('deploy', rawDeploy?.kind ?? 'deploy', deploy, btn('ss-deploy', 'Dismiss', deploy.needs, () => void update($, ssDeploy, () => null)))}
-        {cell('ctx', 'context', ctx, btn('ss-compress', isArmed ? 'Compress…' : 'Compress', ctx.needs || isArmed, () => void ssAskCompress($)))}
+        {canCollapse && <Button key="ss-dock-close" label="▾" plain dimColor onPress={() => void ssPatchUi($, { isOpen: false })} />}
+        {has('repo') && cell('repo', 'repo', repo, null)}
+        {has('docs') && cell('docs', 'docs', docs, btn('ss-docs', 'Fix', docs.needs, () => void ssFixDocs($)))}
+        {has('deploy') && deploy && cell('deploy', rawDeploy?.kind ?? 'deploy', deploy, btn('ss-deploy', 'Dismiss', deploy.needs, () => void update($, ssDeploy, () => null)))}
+        {has('context') && cell('ctx', 'context', withRing(ctx), btn('ss-compress', isArmed ? 'Compress…' : 'Compress', ctx.needs || isArmed, () => void ssAskCompress($)))}
         <Box flexGrow={1} />
-        {cell(
-          'cache',
-          'cache',
-          cache,
-          <Box gap={1}>
-            {btn('ss-refresh', cache.isExpired ? 'Refresh (full price)' : 'Refresh', cache.needs, () => void ssRefreshCache($))}
-            <Button key="ss-gear" label="⚙ ▾" variant={ui.menu ? 'primary' : undefined} onPress={() => void ssPatchUi($, { menu: !ui.menu })} />
-          </Box>,
-        )}
+        {has('cache') &&
+          cell(
+            'cache',
+            'cache',
+            withRing(cache),
+            <Box gap={1}>
+              {btn('ss-refresh', cache.isExpired ? 'Refresh (full price)' : 'Refresh', cache.needs, () => void ssRefreshCache($))}
+              <Button key="ss-gear" label="⚙ ▾" variant={ui.menu ? 'primary' : undefined} onPress={() => void ssPatchUi($, { menu: !ui.menu })} />
+            </Box>,
+          )}
       </Box>
+
+      {ship !== null && ship.isActive && (
+        <Box key="ss-ship" columnGap={2} flexWrap="wrap">
+          <Text bold color={toneColor(shipView(ship, c.now).tone)}>
+            {shipView(ship, c.now).head}
+          </Text>
+          {shipView(ship, c.now).steps.map(st => (
+            <Text key={`ss-step-${st.name}`} color={toneColor(st.tone)} dimColor={st.tone === 'dim'}>
+              {st.mark} {st.text}
+            </Text>
+          ))}
+          {ship.endedAt !== null && <Button key="ss-ship-x" label="×" plain dimColor onPress={() => void update($, ssShip, () => null)} />}
+        </Box>
+      )}
 
       {isArmed && (
         <Box key="ss-confirm" flexDirection="column" borderStyle="round" borderColor="warning" paddingX={1}>
@@ -546,9 +730,18 @@ async function ssRenderStrip($: any, e: any, next: any) {
           )}
           {row(
             'Show the strip',
-            <Select key="ss-s-show" options={[{ value: 'always', label: 'Always' }, { value: 'needed', label: 'Only when something needs you' }]} value={prefs.showMode} onSelect={(v: string) => void ssSetPrefs($, { showMode: v === 'needed' ? 'needed' : 'always' })} />,
+            <Select
+              key="ss-s-show"
+              options={[{ value: 'dock', label: 'Quiet dock (a thin line until needed)' }, { value: 'always', label: 'Always the full strip' }, { value: 'needed', label: 'Only when something needs you' }]}
+              value={prefs.showMode}
+              onSelect={(v: string) => void ssSetPrefs($, { showMode: v === 'needed' ? 'needed' : v === 'always' ? 'always' : 'dock' })}
+            />,
           )}
-          <Text dimColor>Saved once. Applies to every session on this PC.</Text>
+          {row(
+            'Heads-up messages',
+            <Select key="ss-s-toasts" options={[{ value: 'on', label: 'On (cache, context, deploy, ship)' }, { value: 'off', label: 'Off' }]} value={prefs.toasts ? 'on' : 'off'} onSelect={(v: string) => void ssSetPrefs($, { toasts: v === 'on' })} />,
+          )}
+          <Text dimColor>Saved once. Applies to every session on this PC. A repo can override cells and mode in .claude/mods.json.</Text>
         </Box>
       )}
 
@@ -854,26 +1047,17 @@ function shipPromptSubmit($: any, e: any, next: any) {
 }
 
 // ---- usage-guard ----
+// Usage in the bottom bar as small circles, with the 5-hour reset time:  usage 5h ◑ 62% (resets 1h 12m) · 7d ◔ 31%
+// Also warns when an agent starts near a limit and refuses new agents at the edge.
+
 const ugWarnAt = 85 // percent: toast on every agent spawn
 const ugBlockAt = 97 // percent: refuse new agents (they die mid-task at the limit)
 const ugRefreshMs = 60_000
 
-const ugLabels: Record<string, string> = { five_hour: '5h', seven_day: '7d', spend_limit: 'spend' }
-
-type UgLimit = { kind: string; percentUsed: number; resetsAt?: string }
-
-const ugLabel = (kind: string) => ugLabels[kind] ?? kind
-
-const ugSummarize = (limits: readonly UgLimit[]) =>
-  limits.map(l => `${ugLabel(l.kind)} ${Math.round(l.percentUsed)}%`).join(' · ')
-
-const ugWorst = (limits: readonly UgLimit[]) =>
-  limits.reduce<UgLimit | null>((a, b) => (a === null || b.percentUsed > a.percentUsed ? b : a), null)
-
 async function ugSessionStart($: any, e: any, next: any) {
   const refresh = async () => {
     const { rateLimits } = await $.session.usage()
-    $.ui.status(rateLimits.length === 0 ? undefined : `usage ${ugSummarize(rateLimits)}`)
+    $.ui.status(rateLimits.length === 0 ? undefined : `usage ${ugSummarize(rateLimits, await $.clock.now())}`)
   }
   await refresh().catch(() => {})
   $.clock.every(ugRefreshMs, () => {
@@ -885,7 +1069,7 @@ async function ugSessionStart($: any, e: any, next: any) {
 
 async function ugTurnComplete($: any, e: any, next: any) {
   const { rateLimits } = await $.session.usage()
-  $.ui.status(rateLimits.length === 0 ? undefined : `usage ${ugSummarize(rateLimits)}`)
+  $.ui.status(rateLimits.length === 0 ? undefined : `usage ${ugSummarize(rateLimits, await $.clock.now())}`)
   return next(e)
 }
 
@@ -912,10 +1096,13 @@ export const register: Register = on => {
   on('session.end', ($, e, next) => ssSessionEnd($, e, (e1) => next(e1)))
   on('turn.start', ($, e, next) => ssTurnStart($, e, (e1) => next(e1)))
   on('turn.complete', ($, e, next) => ssTurnComplete($, e, (e1) => nsTurnComplete($, e1, (e2) => ugTurnComplete($, e2, (e3) => next(e3)))))
+  on('prompt.submit', ($, e, next) => ssPromptSubmit($, e, (e1) => nsPromptSubmit($, e1, (e2) => shipPromptSubmit($, e2, (e3) => next(e3)))))
   on('tool.call', { tool: 'Bash' }, ($, e, next) => ssToolCallBash($, e, (e1) => next(e1)))
+  on('tool.call', { tool: 'Edit' }, ($, e, next) => ssToolCallEdit($, e, (e1) => next(e1)))
+  on('tool.call', { tool: 'Write' }, ($, e, next) => ssToolCallEdit($, e, (e1) => next(e1)))
+  on('tool.call', { tool: 'MultiEdit' }, ($, e, next) => ssToolCallEdit($, e, (e1) => next(e1)))
   on('command.run', { command: 'where' }, ($, e, next) => ssCommandWhere($, e, (e1) => next(e1)))
   on('ui.render', { component: 'AbovePrompt' }, ($, e, next) => ssRenderStrip($, e, (e1) => nsRenderBand($, e1, (e2) => next(e2))))
   on('command.run', { command: 'next' }, ($, e, next) => nsCommandNext($, e, (e1) => next(e1)))
-  on('prompt.submit', ($, e, next) => nsPromptSubmit($, e, (e1) => shipPromptSubmit($, e1, (e2) => next(e2))))
   on('agent.spawn', ($, e, next) => ugAgentSpawn($, e, (e1) => next(e1)))
 }

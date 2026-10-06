@@ -18,6 +18,19 @@ export type Deploy = {
   isDone: boolean
 }
 
+/** The ship stepper: a "deploy it" request followed through its steps. Step times are -1 until the step starts. */
+export type Ship = {
+  isActive: boolean
+  failed: boolean
+  startedAt: number
+  endedAt: number | null
+  current: number
+  stepStarts: number[]
+}
+
+/** From the repo's .claude/mods.json: which cells to show and how. Null means "no preference". */
+export type ProfileState = { cells: string[] | null; show: 'dock' | 'always' | 'needed' | null }
+
 export type CacheState = {
   lastApiAt: number | null
   readTokens: number
@@ -41,10 +54,13 @@ export type Prefs = {
   idleHours: number
   /** The cache cell turns amber when this many minutes or fewer are left. */
   warnMin: number
-  showMode: 'always' | 'needed'
+  /** 'dock': a thin line that opens when something needs you. 'always': the full strip. 'needed': hidden until needed. */
+  showMode: 'dock' | 'always' | 'needed'
+  /** Short heads-up messages (cache about to expire, deploy finished) instead of lines that stay on screen. */
+  toasts: boolean
 }
 
-export type StripUi = { menu: boolean; confirm: boolean; armedAt: number | null; msg: string }
+export type StripUi = { menu: boolean; confirm: boolean; armedAt: number | null; msg: string; isOpen: boolean }
 
 export type NextSteps = {
   items: string[]
@@ -69,6 +85,8 @@ declare module 'claude-code' {
     'status-strip.repo': Repo;
     'status-strip.docs': Docs | null;
     'status-strip.deploy': Deploy | null;
+    'status-strip.ship': Ship | null;
+    'status-strip.profile': ProfileState;
     'status-strip.cache': CacheState;
     'status-strip.prefs': Prefs;
     'status-strip.ui': StripUi;

@@ -45,7 +45,9 @@ test('bundle: one band holds the strip and the next-steps list; clicking sends',
 
   const text = JSON.stringify(await ui.findAll({ type: 'Text' }))
   expect(text).toContain('main ±1 ↑2')
-  expect(text).toContain('62%')
+  expect(text).toContain('◑ 62%') // the quiet dock line, with its small circle
+  expect(await ui.find({ key: 'ss-compress' })).toBeUndefined() // collapsed while all is fine
+  await ui.press({ key: 'ss-dock-open' })
   expect(await ui.find({ key: 'ss-compress' })).toBeDefined()
 
   await $.turn.complete({ answer: 'done', durationMs: 1, isAborted: false, turnId: 't1' } as any)
