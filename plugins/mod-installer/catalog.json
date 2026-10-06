@@ -11,34 +11,38 @@
     {
       "id": "status-strip",
       "name": "status-strip",
-      "summary": "One quiet strip: repo, docs, deploy, context and cache, each with a button",
-      "where": "A strip above the prompt. Each item is a dim label with its value underneath and one button, dim until something needs doing. Cache sits on the far right with a settings dropdown. Also adds /where. During a push, merge or deploy it shows how long it has been going, then how long it took.",
+      "summary": "One quiet strip: repo, docs, deploy, context and cache, with small circular meters",
+      "where": "A thin dock line above the prompt while everything is fine (click ▸ to open it); it opens by itself when something needs you. Context and cache show a small circle (○ ◔ ◑ ◕ ●). During a push, merge or deploy it shows how long it has been going, and a \"deploy it\" request is followed step by step with a timer per step. Short heads-up messages tell you once when the cache is about to expire or a deploy finishes. A repo can choose its own cells in .claude/mods.json. Also adds /where.",
       "preview": [
         {
-          "text": "repo            docs            context                                    cache"
+          "text": "▸ main ±3 · ◑ 38% · ◕ 47m left                      (quiet dock: click ▸ to open)",
+          "dim": true
         },
         {
-          "text": "main ±3 ↑2      current         62%                                        expired",
-          "dim": false
+          "text": "▾ repo main ±3 ↑2   docs current   context ◕ 78% [ Compress ]        cache ◕ 47m left [ Refresh ] [ ⚙ ▾ ]"
         },
         {
-          "text": "[ Refresh ]     [ Fix ]         [ Compress ]               [ Refresh (full price) ] [ ⚙ ▾ ]"
+          "text": "shipping · 5m   ✔ tests 2m   ✔ version <1m   ✔ pull request <1m   ▶ merge 1m   · deploy   · verify"
+        },
+        {
+          "text": "merge  CI running · 7m          merge started 14:32 (still going) · Deploy",
+          "dim": true
+        },
+        {
+          "text": "heads-up (shows once, then fades):  ✔ Shipped in 9m.   ·   Cache expires in 8m. Press Refresh to keep it warm.",
+          "dim": true
         },
         {
           "text": "Compress asks first: \"Compress this conversation?\"  [ Yes, compress ] [ Cancel ]",
           "dim": true
         },
         {
-          "text": "⚙ ▾ opens dropdowns: cache lifetime, keep alive, idle stop, warn level, show always or only when needed",
-          "dim": true
-        },
-        {
-          "text": "push  CI running · 7m        (push started 14:32 · still going)  →  ✔ v3.22 live · 9m",
+          "text": "⚙ ▾ dropdowns: cache lifetime, keep alive, idle stop, warn level, quiet dock / full strip / only when needed, heads-ups on or off",
           "dim": true
         }
       ],
       "cost": "Checking is free. Refresh and the optional Auto keep-alive read your cached context (about 10% of normal input price). Compress is one summarizing call. Auto is off by default.",
-      "needs": "git for the repo and docs cells; the GitHub CLI (gh) for the deploy cell. Optional .claude/deploy-verify.json with a healthUrl."
+      "needs": "git for the repo and docs cells; the GitHub CLI (gh) for the deploy cell. Optional .claude/deploy-verify.json with a healthUrl, and .claude/mods.json to pick a repo's cells, for example {\"cells\": [\"repo\", \"context\", \"cache\"], \"show\": \"dock\"}."
     },
     {
       "id": "next-steps",
@@ -108,11 +112,11 @@
     {
       "id": "usage-guard",
       "name": "usage-guard",
-      "summary": "Rate-limit usage in the bottom bar; guards agent fan-out",
+      "summary": "Usage in the bottom bar as small circles, with the reset time; guards agent fan-out",
       "where": "The bottom bar under the message box, plus a toast when an agent starts near a limit.",
       "preview": [
         {
-          "text": "bottom bar:   usage 5h 62% · 7d 31%"
+          "text": "bottom bar:   usage 5h ◑ 62% (resets 1h 12m) · 7d ◔ 31%"
         },
         {
           "text": "toast (85%+): usage-guard: 5h usage at 88% — starting \"Audit sessions\"",

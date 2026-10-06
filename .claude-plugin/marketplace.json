@@ -1,39 +1,39 @@
 {
-    "name":  "workflow-mods",
-    "description":  "Small Claude Code mods for shipping, deploy verification, session status, usage limits and prompt-cache management.",
-    "owner":  {
-                  "name":  "Liberty Technical Solutions"
-              },
-    "plugins":  [
-                    {
-                        "name":  "mod-installer",
-                        "source":  "./plugins/mod-installer",
-                        "description":  "Start here: type /mods to preview the workflow mods, tick the ones you want and install them."
-                    },
-                    {
-                        "name":  "all-mods",
-                        "source":  "./plugins/all-mods",
-                        "description":  "Everything in one install, no choices. Install this OR the individual mods, never both."
-                    },
-                    {
-                        "name":  "status-strip",
-                        "source":  "./plugins/status-strip",
-                        "description":  "One quiet strip: repo, docs, deploy, context and cache, each with a button"
-                    },
-                    {
-                        "name":  "next-steps",
-                        "source":  "./plugins/next-steps",
-                        "description":  "Tick the next steps you want, instead of typing them"
-                    },
-                    {
-                        "name":  "ship-it",
-                        "source":  "./plugins/ship-it",
-                        "description":  "A bare \"deploy it\" becomes the full ship checklist"
-                    },
-                    {
-                        "name":  "usage-guard",
-                        "source":  "./plugins/usage-guard",
-                        "description":  "Rate-limit usage in the bottom bar; guards agent fan-out"
-                    }
-                ]
+  "name": "workflow-mods",
+  "description": "Small Claude Code mods for shipping, deploy verification, session status, usage limits and prompt-cache management.",
+  "owner": {
+    "name": "Liberty Technical Solutions"
+  },
+  "plugins": [
+    {
+      "name": "mod-installer",
+      "source": "./plugins/mod-installer",
+      "description": "Start here: type /mods to preview the workflow mods, tick the ones you want and install them."
+    },
+    {
+      "name": "all-mods",
+      "source": "./plugins/all-mods",
+      "description": "Everything in one install, no choices. Install this OR the individual mods, never both."
+    },
+    {
+      "name": "status-strip",
+      "source": "./plugins/status-strip",
+      "description": "One quiet strip: repo, docs, deploy, context and cache, with small circular meters"
+    },
+    {
+      "name": "next-steps",
+      "source": "./plugins/next-steps",
+      "description": "Tick the next steps you want, instead of typing them"
+    },
+    {
+      "name": "ship-it",
+      "source": "./plugins/ship-it",
+      "description": "A bare \"deploy it\" becomes the full ship checklist"
+    },
+    {
+      "name": "usage-guard",
+      "source": "./plugins/usage-guard",
+      "description": "Usage in the bottom bar as small circles, with the reset time; guards agent fan-out"
+    }
+  ]
 }

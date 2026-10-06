@@ -57,10 +57,10 @@ The scripts edit `~/.claude/settings.json` (backup: `settings.json.bak-before-mo
 
 | Mod | What it does | Uses tokens? |
 |---|---|---|
-| `status-strip` | One quiet strip above the prompt: repo, docs, deploy, context and cache. Each is a dim label with its value underneath and one button (dim until something needs doing). **Compress** asks for confirmation first. The cache **⚙ ▾** dropdown sets lifetime, keep-alive, idle stop and warn level once. Also adds `/where` | Checking is free. Refresh and Auto keep-alive read the cached context (~10% price); Compress is one summarizing call. Auto is off by default |
+| `status-strip` | One quiet strip above the prompt: repo, docs, deploy, context and cache. It is a thin **dock** line while all is fine and opens (▸) or by itself when something needs you. Context and cache show a small circle meter (○ ◔ ◑ ◕ ●). Pushes, merges and deploys show elapsed time; a "deploy it" request is followed by a **ship stepper** with a timer per step; **heads-up** messages say it once when the cache is about to expire or a deploy finishes. **Compress** asks first; the **⚙ ▾** dropdowns set everything once. A repo can choose its cells in `.claude/mods.json`. Also adds `/where` | Checking is free. Refresh and Auto keep-alive read the cached context (~10% price); Compress is one summarizing call. Auto is off by default |
 | `next-steps` | Whenever nothing is running (session start, after a reply, after a stopped reply), a checkbox panel of options for what to do next: tick one or more, preview, then send, or send one with a click. Uses what Claude proposed, otherwise suggests sensible next tasks, with built-in lists as a backstop. `/next` turns it off | One small request per reply to a small, fast model with just your latest request and Claude's reply (about a couple of thousand input tokens) |
 | `ship-it` | A bare "deploy it" / "ship it" / "merge it" gets the full commit-PR-merge-deploy-verify checklist attached (hidden context) | A few hundred extra tokens on those prompts only |
-| `usage-guard` | Rate-limit usage in the bottom bar; toast at 85%, blocks new agents at 97% | No |
+| `usage-guard` | Rate-limit usage in the bottom bar as small circles with the 5-hour reset time (`5h ◑ 62% (resets 1h 12m)`); toast at 85%, blocks new agents at 97% | No |
 
 > `status-strip` replaces the four earlier mods `where-are-we`, `close-out-check`, `deploy-verifier` and `cache-keeper`. The installer recognises those and swaps them for `status-strip` when you press **Install selected**.
 
@@ -73,6 +73,7 @@ The scripts edit `~/.claude/settings.json` (backup: `settings.json.bak-before-mo
 
 - `.claude/deploy-verify.json`: `{ "healthUrl": "https://your-app/api/health", "versionField": "version", "versionFile": "package.json" }`. Without it the deploy cell shows CI only.
 - `.claude/where.json`: `{ "ports": [3000, 8347], "docs": ["HANDOFF.md"] }` (used by `/where`).
+- `.claude/mods.json`: `{ "cells": ["repo", "context", "cache"], "show": "dock" }`. Which strip cells this repo shows (`repo`, `docs`, `deploy`, `context`, `cache`) and how (`dock`, `always` or `needed`). Edits apply within about 30 seconds. A notes repo with no CI can drop `docs` and `deploy`.
 
 ## Things to know
 

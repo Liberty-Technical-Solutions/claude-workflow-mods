@@ -4,7 +4,7 @@ import { expect, mock, test } from 'claude-code/testing'
 
 const PROPS = { hasSurvey: false, bodyColumns: 100 } as any
 
-function world(on: any, opts: { ctx?: number; runList?: () => string } = {}) {
+function world(on: any, opts: { ctx?: number; runList?: () => string; files?: Record<string, string> } = {}) {
   const compacted: number[] = []
   const submitted: string[] = []
   on('process.run', ($: any, e: any) => {
@@ -26,14 +26,22 @@ function world(on: any, opts: { ctx?: number; runList?: () => string } = {}) {
     compacted.push(1)
     return { skip: 'test world' }
   })
-  on('fs.exists', () => ({ value: false }))
-  on('fs.read', () => {
-    throw new Error('no such file')
+  // The engine may resolve a relative path to an absolute one, so match the file by the end of its path.
+  const fileFor = (path: string) => {
+    const p = path.split('\\').join('/')
+    const hit = Object.keys(opts.files ?? {}).find(k => p === k || p.endsWith('/' + k))
+    return hit === undefined ? undefined : opts.files![hit]
+  }
+  on('fs.exists', ($: any, e: any) => ({ value: fileFor(e.path) !== undefined }))
+  on('fs.read', ($: any, e: any) => {
+    const f = fileFor(e.path)
+    if (f === undefined) throw new Error('no such file')
+    return { value: f }
   })
   on('command.register', () => ({ value: undefined }))
   on('prompt.submit', ($: any, e: any) => {
     submitted.push(e.text)
-    return { value: { text: e.text } }
+    return { text: e.text }
   })
   return { compacted, submitted }
 }
@@ -110,4 +118,126 @@ test('a push shows how long the deploy has been going, then how long it took', a
   await clock.advance(60_000)
   await ui.redraw()
   expect(JSON.stringify(await ui.findAll({ type: 'Text' }))).toMatch(/CI passed · [5-7]m/)
+})
+
+// ---- quiet dock, meters, profile, ship stepper, heads-ups ------------------------------------------------------
+
+function extras(on: any, opts: { files?: Record<string, string>; runList?: () => string } = {}) {
+  const toasts: string[] = []
+  on('ui.toast', ($: any, e: any) => {
+    toasts.push(e.text)
+    return { value: undefined }
+  })
+  on('turn.complete', ($: any, e: any) => ({ text: e.answer }))
+  on('tool.call', () => ({ result: 'ok', text: 'ok', isError: false }))
+  return { toasts }
+}
+
+const texts = async (ui: any) => (await ui.findAll({ type: 'Text' })).map((t: any) => t.text).join(' | ')
+
+test('quiet dock: one thin line while all is fine, opens on click, opens by itself when something needs you', async ($, on) => {
+  mock.store(on)
+  mock.clock(on, { now: 1_000 })
+  world(on, { ctx: 38 })
+  extras(on)
+  const ui = await start($)
+
+  expect(await ui.find({ key: 'ss-dock-open' })).toBeDefined()
+  expect(await ui.find({ key: 'ss-compress' })).toBeUndefined()
+  expect(await texts(ui)).toContain('◑ 38%') // a small circle beside the number
+  await ui.press({ key: 'ss-dock-open' })
+  expect(await ui.find({ key: 'ss-compress' })).toBeDefined()
+  await ui.press({ key: 'ss-dock-close' })
+  expect(await ui.find({ key: 'ss-compress' })).toBeUndefined()
+})
+
+test('quiet dock: opens by itself when context is high', async ($, on) => {
+  mock.store(on)
+  mock.clock(on, { now: 1_000 })
+  world(on, { ctx: 78 })
+  extras(on)
+  const ui = await start($)
+  expect(await ui.find({ key: 'ss-dock-open' })).toBeUndefined()
+  expect(await ui.find({ key: 'ss-compress' })).toBeDefined()
+  expect(await texts(ui)).toContain('◕ 78%')
+})
+
+test('per-project profile: .claude/mods.json picks the cells and the mode', async ($, on) => {
+  mock.store(on)
+  mock.clock(on, { now: 1_000 })
+  world(on, { ctx: 62, files: { '.claude/mods.json': '{"show":"always","cells":["repo","context"]}' } })
+  extras(on)
+  const ui = await start($)
+  expect(await ui.find({ key: 'ss-dock-open' })).toBeUndefined() // "always" overrides the default dock
+  expect(await ui.find({ key: 'ss-compress' })).toBeDefined()
+  expect(await ui.find({ key: 'ss-docs' })).toBeUndefined() // docs cell hidden for this repo
+  expect(await ui.find({ key: 'ss-refresh' })).toBeUndefined() // cache cell hidden too
+  expect(await texts(ui)).toContain('◑ 62%')
+})
+
+test('ship stepper: follows "deploy it" through tests, version, PR, merge, deploy and says when it is done', async ($, on) => {
+  mock.store(on)
+  const clock = mock.clock(on, { now: 1_000 })
+  let status = 'in_progress'
+  world(on, { ctx: 38, runList: () => JSON.stringify([{ databaseId: 1, status, conclusion: status === 'completed' ? 'success' : '', name: 'Deploy' }]) })
+  const x = extras(on)
+  const ui = await start($)
+
+  expect(await texts(ui)).not.toContain('shipping')
+  await $.prompt.submit({ text: 'deploy it' })
+  await $.tool.call({ tool: 'Bash', tool_use_id: 't1', command: 'pnpm test' } as any)
+  await clock.advance(2 * 60_000)
+  await ui.redraw()
+  let t = await texts(ui)
+  expect(t).toContain('shipping')
+  expect(t).toContain('▶ tests')
+  expect(await ui.find({ key: 'ss-dock-open' })).toBeUndefined() // shipping holds the dock open
+
+  await $.tool.call({ tool: 'Edit', tool_use_id: 't2', file_path: '/repo/CHANGELOG.md' } as any)
+  await $.tool.call({ tool: 'Bash', tool_use_id: 't3', command: 'git commit -m release' } as any)
+  await $.tool.call({ tool: 'Bash', tool_use_id: 't4', command: 'gh pr merge 5 --squash' } as any)
+  await clock.advance(60_000)
+  await ui.redraw()
+  t = await texts(ui)
+  expect(t).toContain('✔ tests')
+  expect(t).toContain('✔ version')
+  expect(t).toContain('▶ merge')
+  expect(t).toMatch(/merge \| CI (queued|running) · /) // the deploy cell is labelled "merge" and timed
+
+  status = 'completed'
+  await clock.advance(2 * 60_000)
+  await ui.redraw()
+  t = await texts(ui)
+  expect(t).toMatch(/shipped in \d+m/)
+  expect(x.toasts.some(m => m.includes('Shipped in'))).toBe(true)
+})
+
+test('heads-ups: cache expiry is announced once, not left as a permanent line', async ($, on) => {
+  mock.store(on)
+  const clock = mock.clock(on, { now: 1_000 })
+  world(on, { ctx: 38 })
+  const x = extras(on)
+  await start($)
+  await $.turn.complete({ answer: 'done', durationMs: 1, isAborted: false, turnId: 't1' } as any)
+
+  await clock.advance(30 * 60_000) // 30 of 60 minutes used: nothing to say yet
+  expect(x.toasts.filter(m => m.includes('Cache expires'))).toEqual([])
+  await clock.advance(22 * 60_000) // 8 minutes left: inside the warning window
+  expect(x.toasts.filter(m => m.includes('Cache expires'))).toHaveLength(1)
+  await clock.advance(5 * 60_000) // still inside the window: no repeat
+  expect(x.toasts.filter(m => m.includes('Cache expires'))).toHaveLength(1)
+})
+
+test('heads-ups can be switched off in the settings dropdown', async ($, on) => {
+  mock.store(on)
+  const clock = mock.clock(on, { now: 1_000 })
+  world(on, { ctx: 38 })
+  const x = extras(on)
+  const ui = await start($)
+  await ui.press({ key: 'ss-dock-open' })
+  await ui.press({ key: 'ss-gear' })
+  await ui.select({ key: 'ss-s-toasts', value: 'off' })
+  await $.turn.complete({ answer: 'done', durationMs: 1, isAborted: false, turnId: 't1' } as any)
+  await clock.advance(55 * 60_000)
+  expect(x.toasts).toEqual([])
 })

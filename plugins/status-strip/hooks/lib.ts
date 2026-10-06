@@ -19,7 +19,7 @@ export type DeployLike = {
 export type CacheLike = { lastApiAt: number | null; ctxPercent: number | null; ctxTokens: number | null; ctxWindow: number | null; now: number }
 export type PrefsLike = { ttlMin: number; warnMin: number }
 
-export type CellView = { text: string; tone: Tone; needs: boolean }
+export type CellView = { text: string; tone: Tone; needs: boolean; ring?: string }
 
 export const COMPRESS_AT = 70 // percent of the context window
 export const CONFIRM_MS = 15_000
@@ -99,17 +99,18 @@ export function deployView(d: DeployLike | null, now: number): CellView | null {
 export function ctxView(c: CacheLike): CellView {
   if (c.ctxPercent === null) return { text: '—', tone: 'dim', needs: false }
   const needs = c.ctxPercent >= COMPRESS_AT
-  return { text: `${Math.round(c.ctxPercent)}%`, tone: needs ? 'warning' : 'normal', needs }
+  return { text: `${Math.round(c.ctxPercent)}%`, tone: needs ? 'warning' : 'normal', needs, ring: ringGlyph(c.ctxPercent) }
 }
 
 export type CacheView = CellView & { isExpired: boolean; isCold: boolean }
 
 export function cacheView(c: CacheLike, p: PrefsLike): CacheView {
-  if (c.lastApiAt === null) return { text: 'cold', tone: 'dim', needs: false, isExpired: false, isCold: true }
+  if (c.lastApiAt === null) return { text: 'cold', tone: 'dim', needs: false, isExpired: false, isCold: true, ring: '○' }
   const left = p.ttlMin * 60_000 - (c.now - c.lastApiAt)
-  if (left <= 0) return { text: 'expired', tone: 'error', needs: true, isExpired: true, isCold: true }
+  if (left <= 0) return { text: 'expired', tone: 'error', needs: true, isExpired: true, isCold: true, ring: '○' }
   const needs = left <= p.warnMin * 60_000
-  return { text: `${fmtLeft(left)} left`, tone: needs ? 'warning' : 'normal', needs, isExpired: false, isCold: false }
+  // The ring shows how much of the lifetime is LEFT: full when fresh, empty when about to expire.
+  return { text: `${fmtLeft(left)} left`, tone: needs ? 'warning' : 'normal', needs, isExpired: false, isCold: false, ring: ringGlyph((left / (p.ttlMin * 60_000)) * 100) }
 }
 
 /** Which of the repo's files say a code change needs release notes, a version bump or a handoff update. */
@@ -128,4 +129,137 @@ export function docsMissing(a: {
   if (a.hasVersionField && !a.changed.includes('package.json')) missing.push('version not bumped')
   if (a.handoffs.length > 0 && !touched(a.handoffs)) missing.push(`${a.handoffs[0]} not updated`)
   return missing
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Meters: one small circle that fills up. Five steps keep it a single character wide.
+// ---------------------------------------------------------------------------------------------------------------
+
+/** A one-character circular meter for a percentage: empty, quarter, half, three-quarters, full. */
+export function ringGlyph(pct: number | null): string {
+  if (pct === null) return '○'
+  const p = Math.min(100, Math.max(0, pct))
+  if (p < 12.5) return '○'
+  if (p < 37.5) return '◔'
+  if (p < 62.5) return '◑'
+  if (p < 87.5) return '◕'
+  return '●'
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Per-project profile: .claude/mods.json decides which cells a repo shows.
+// ---------------------------------------------------------------------------------------------------------------
+
+export const CELL_IDS = ['repo', 'docs', 'deploy', 'context', 'cache']
+export type ShowMode = 'dock' | 'always' | 'needed'
+export type Profile = { cells: string[] | null; show: ShowMode | null }
+
+/** Reads .claude/mods.json: { "cells": ["repo","context","cache"], "show": "dock" }. Anything unusable is ignored. */
+export function parseProfile(text: string | null): Profile {
+  const none: Profile = { cells: null, show: null }
+  if (!text) return none
+  let raw: any
+  try {
+    raw = JSON.parse(text)
+  } catch {
+    return none
+  }
+  if (!raw || typeof raw !== 'object') return none
+  const cells = Array.isArray(raw.cells) ? CELL_IDS.filter(id => raw.cells.includes(id)) : null
+  const show = raw.show === 'dock' || raw.show === 'always' || raw.show === 'needed' ? (raw.show as ShowMode) : null
+  return { cells: cells && cells.length > 0 ? cells : null, show }
+}
+
+export const showCell = (p: Profile, id: string) => p.cells === null || p.cells.includes(id)
+
+// ---------------------------------------------------------------------------------------------------------------
+// Ship stepper: follows a "deploy it" request through its steps, with a timer per step.
+// ---------------------------------------------------------------------------------------------------------------
+
+export const SHIP_STEPS = ['tests', 'version', 'pull request', 'merge', 'deploy', 'verify']
+
+export type ShipLike = { isActive: boolean; failed: boolean; startedAt: number; endedAt: number | null; current: number; stepStarts: number[] }
+
+export function newShip(now: number): ShipLike {
+  return { isActive: true, failed: false, startedAt: now, endedAt: null, current: -1, stepStarts: SHIP_STEPS.map(() => -1) }
+}
+
+const SHIP_WHOLE = [
+  /^(ok(ay)?,? )?(please )?(go ahead and )?(deploy|ship)( it| them| this| all)?( now| please)?$/,
+  /^(build|commit)( it| them)?,? (and|then) (deploy|ship)( it| them)?$/,
+  /^push( it)? to (master|main),? (and|then) (deploy|ship)( it)?$/,
+  /^(deploy|ship)( it| them)? to (prod|production)$/,
+  /^(proceed|continue|finish)(,)? (and|then) (deploy|ship)( it)?$/,
+  /^(ok(ay)?,? )?(please )?(go ahead and )?merge( it| them| this)?( now| please)?$/,
+]
+const SHIP_TAIL = /\b(and|then)\s+(deploy|ship)(\s+(it|them|this))?(\s+to\s+(prod|production))?$/
+
+/** True for a short "deploy it" / "ship it" / "merge it" style request. */
+export function isShipRequest(text: string): boolean {
+  const t = text.toLowerCase().replace(/[.!]+$/g, '').replace(/\s+/g, ' ').trim()
+  return SHIP_WHOLE.some(re => re.test(t)) || (t.length < 400 && SHIP_TAIL.test(t))
+}
+
+const TEST_CMD = /\b(?:(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:test|check|lint|typecheck)|pytest|vitest|jest|go\s+test|cargo\s+test|dotnet\s+test|node\s+--test|claude\s+plugin\s+test)\b/i
+const DEPLOY_CMD = /\bgh\s+workflow\s+run\b|\b(?:npm|pnpm|yarn)\s+(?:run\s+)?deploy\b|\bvercel\b.*--prod|\bfly\s+deploy\b|\baz(?:d)?\s+(?:webapp|staticwebapp|deploy|up)\b|\bdeploy[\w-]*\.(?:sh|ps1)\b/i
+
+/** Which ship step a shell command belongs to, or null when it is not part of shipping. */
+export function stepForCommand(command: string, current: number): number | null {
+  if (TEST_CMD.test(command)) return 0
+  if (/\bgit\s+commit\b/i.test(command) || /\bgh\s+pr\s+create\b/i.test(command)) return 2
+  if (/\bgh\s+pr\s+merge\b/i.test(command)) return 3
+  if (/\bgit\s+push\b/i.test(command)) return current >= 3 ? 4 : 2
+  if (DEPLOY_CMD.test(command)) return 4
+  return null
+}
+
+/** The version and release-notes step: an edit to CHANGELOG or package.json. */
+export function stepForEdit(filePath: string): number | null {
+  const name = filePath.split(/[\\/]/).pop() ?? ''
+  return /^CHANGELOG(\.md)?$/i.test(name) || name === 'package.json' ? 1 : null
+}
+
+/** Moves the stepper forward only; a step that never happened simply shows as skipped. */
+export function advanceShip(s: ShipLike, step: number, now: number): ShipLike {
+  if (!s.isActive || s.endedAt !== null || step <= s.current) return s
+  const stepStarts = [...s.stepStarts]
+  if (stepStarts[step] < 0) stepStarts[step] = now
+  return { ...s, current: step, stepStarts }
+}
+
+export function finishShip(s: ShipLike, now: number, failed: boolean): ShipLike {
+  if (!s.isActive || s.endedAt !== null) return s
+  const stepStarts = [...s.stepStarts]
+  if (!failed && stepStarts[SHIP_STEPS.length - 1] < 0) stepStarts[SHIP_STEPS.length - 1] = now
+  return { ...s, endedAt: now, failed, current: failed ? s.current : SHIP_STEPS.length - 1, stepStarts }
+}
+
+export type ShipStepView = { name: string; mark: string; text: string; tone: Tone }
+
+export function shipView(s: ShipLike, now: number): { head: string; tone: Tone; steps: ShipStepView[] } {
+  const end = s.endedAt ?? now
+  const total = fmtElapsed(end - s.startedAt)
+  const finished = s.endedAt !== null && !s.failed
+  const head = finished ? `shipped in ${total}` : s.failed ? `ship stopped after ${total}` : `shipping · ${total}`
+  const steps = SHIP_STEPS.map((name, i): ShipStepView => {
+    const start = s.stepStarts[i]
+    const isDone = finished || i < s.current
+    const isRunning = !finished && !s.failed && i === s.current
+    if (s.failed && i === s.current && start >= 0) return { name, mark: '✘', text: `${name} failed after ${fmtElapsed(end - start)}`, tone: 'error' }
+    if (!isDone && !isRunning) return { name, mark: '·', text: name, tone: 'dim' }
+    if (start < 0) return { name, mark: '–', text: `${name} skipped`, tone: 'dim' }
+    const next = s.stepStarts.slice(i + 1).find(t => t >= 0)
+    const stepEnd = isRunning ? end : (next ?? end)
+    return { name, mark: isRunning ? '▶' : '✔', text: `${name} ${fmtElapsed(stepEnd - start)}`, tone: isRunning ? 'warning' : 'success' }
+  })
+  return { head, tone: s.failed ? 'error' : finished ? 'success' : 'warning', steps }
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Heads-ups: one-time messages decided here so they can be tested without a session.
+// ---------------------------------------------------------------------------------------------------------------
+
+/** True once per cache fill: the lifetime has dropped to the warning level but not yet run out. */
+export function shouldWarnCache(left: number | null, warnMs: number, alreadyFor: number | null, fillAt: number | null): boolean {
+  return left !== null && left > 0 && left <= warnMs && fillAt !== null && alreadyFor !== fillAt
 }

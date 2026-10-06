@@ -32,9 +32,13 @@ foreach ($mod in $mods) {
   $libFile = Join-Path $root "plugins\$mod\hooks\lib.ts"
   if (Test-Path $libFile) {
     Save (Join-Path $out "hooks\$mod-lib.ts") ("// GENERATED copy of plugins/$mod/hooks/lib.ts by build-bundle.ps1. Do not edit.`n" + [System.IO.File]::ReadAllText($libFile))
-    foreach ($line in ($body -split "`n" | Where-Object { $_ -match "^import .* from '\./lib'" })) { $libImports += $line.Replace("'./lib'", "'./$mod-lib'") }
   }
-  $body = ($body -split "`n" | Where-Object { $_ -notmatch '^import ' }) -join "`n"
+  # Imports may span several lines. Keep the ones from ./lib (re-pointed at this mod's copy); drop all the others.
+  $importPattern = "(?ms)^import\b.*?\bfrom\s+'([^']+)'[ \t]*;?[ \t]*(?:\n|\z)"
+  foreach ($im in [regex]::Matches($body, $importPattern)) {
+    if ($im.Groups[1].Value -eq './lib' -and (Test-Path $libFile)) { $libImports += $im.Value.TrimEnd().Replace("'./lib'", "'./$mod-lib'") }
+  }
+  $body = [regex]::Replace($body, $importPattern, '')
   $body = [regex]::Replace($body, "plugin: '$mod', key: '([^']+)'", "plugin: 'all-mods', key: '$mod.`$1'")
 
   foreach ($n in [regex]::Matches($body, '(?m)^(?:export )?(?:async )?(?:function|const|let|type) (\w+)')) {

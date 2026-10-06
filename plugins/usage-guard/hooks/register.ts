@@ -1,25 +1,18 @@
 import type { Register } from 'claude-code'
 
+import { ugLabel, ugSummarize, ugWorst } from './lib'
+
+// Usage in the bottom bar as small circles, with the 5-hour reset time:  usage 5h ◑ 62% (resets 1h 12m) · 7d ◔ 31%
+// Also warns when an agent starts near a limit and refuses new agents at the edge.
+
 const ugWarnAt = 85 // percent: toast on every agent spawn
 const ugBlockAt = 97 // percent: refuse new agents (they die mid-task at the limit)
 const ugRefreshMs = 60_000
 
-const ugLabels: Record<string, string> = { five_hour: '5h', seven_day: '7d', spend_limit: 'spend' }
-
-type UgLimit = { kind: string; percentUsed: number; resetsAt?: string }
-
-const ugLabel = (kind: string) => ugLabels[kind] ?? kind
-
-const ugSummarize = (limits: readonly UgLimit[]) =>
-  limits.map(l => `${ugLabel(l.kind)} ${Math.round(l.percentUsed)}%`).join(' · ')
-
-const ugWorst = (limits: readonly UgLimit[]) =>
-  limits.reduce<UgLimit | null>((a, b) => (a === null || b.percentUsed > a.percentUsed ? b : a), null)
-
 async function ugSessionStart($: any, e: any, next: any) {
   const refresh = async () => {
     const { rateLimits } = await $.session.usage()
-    $.ui.status(rateLimits.length === 0 ? undefined : `usage ${ugSummarize(rateLimits)}`)
+    $.ui.status(rateLimits.length === 0 ? undefined : `usage ${ugSummarize(rateLimits, await $.clock.now())}`)
   }
   await refresh().catch(() => {})
   $.clock.every(ugRefreshMs, () => {
@@ -31,7 +24,7 @@ async function ugSessionStart($: any, e: any, next: any) {
 
 async function ugTurnComplete($: any, e: any, next: any) {
   const { rateLimits } = await $.session.usage()
-  $.ui.status(rateLimits.length === 0 ? undefined : `usage ${ugSummarize(rateLimits)}`)
+  $.ui.status(rateLimits.length === 0 ? undefined : `usage ${ugSummarize(rateLimits, await $.clock.now())}`)
   return next(e)
 }
 
