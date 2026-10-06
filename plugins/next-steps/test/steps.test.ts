@@ -56,16 +56,16 @@ test('options appear as checkboxes; ticking several and pressing Send selected s
   const ui = await $.ui.mount({ plugin: 'next-steps', surface: 'terminal', component: 'AbovePrompt', props: PROPS })
 
   // Idle at the start: the starting points are already there.
-  expect((await ui.find({ key: 'ns-pick-0' }))?.props.label).toBe('[ ] 1  Show me where this project stands and what is left')
+  expect((await ui.find({ key: 'ns-pick-0' }))?.props.label).toBe('[ ] Show me where this project stands and what is left')
   await replyDone($, clock)
   await ui.redraw()
-  expect((await ui.find({ key: 'ns-pick-0' }))?.props.label).toBe('[ ] 1  Run the tests')
-  expect((await ui.find({ key: 'ns-pick-2' }))?.props.label).toBe('[ ] 3  Review the diff')
+  expect((await ui.find({ key: 'ns-pick-0' }))?.props.label).toBe('[ ] Run the tests')
+  expect((await ui.find({ key: 'ns-pick-2' }))?.props.label).toBe('[ ] Review the diff')
   expect(w.suggested[0]).toBe('Run the tests')
 
   await ui.press({ key: 'ns-pick-0' })
   await ui.press({ key: 'ns-pick-1' })
-  expect((await ui.find({ key: 'ns-pick-1' }))?.props.label).toBe('[x] 2  Commit and push')
+  expect((await ui.find({ key: 'ns-pick-1' }))?.props.label).toBe('[x] Commit and push')
   expect((await ui.find({ key: 'ns-send' }))?.props.label).toBe('Send selected (2)')
 
   await ui.press({ key: 'ns-send' })
@@ -93,7 +93,7 @@ test('Back from the preview returns to the checkboxes without sending', async ($
   expect(await ui.find({ key: 'ns-confirm' })).toBeDefined()
   await ui.press({ key: 'ns-back' })
   expect(await ui.find({ key: 'ns-confirm' })).toBeUndefined()
-  expect((await ui.find({ key: 'ns-pick-0' }))?.props.label).toBe('[x] 1  Run the tests')
+  expect((await ui.find({ key: 'ns-pick-0' }))?.props.label).toBe('[x] Run the tests')
   expect(w.sent).toEqual([])
 })
 
@@ -119,7 +119,7 @@ test('Send selected does nothing until something is ticked', async ($, on) => {
   await ui.redraw()
   await ui.press({ key: 'ns-send' })
   expect(w.sent).toEqual([])
-  expect((await ui.find({ key: 'ns-pick-0' }))?.props.label).toBe('[ ] 1  Run the tests')
+  expect((await ui.find({ key: 'ns-pick-0' }))?.props.label).toBe('[ ] Run the tests')
 })
 
 test('Edit selected puts the ticked options in the prompt box instead of sending', async ($, on) => {
@@ -144,7 +144,7 @@ test('when the model gives nothing usable, built-in suggestions are shown', asyn
   const ui = await $.ui.mount({ plugin: 'next-steps', surface: 'terminal', component: 'AbovePrompt', props: PROPS })
   await replyDone($, clock)
   await ui.redraw()
-  expect((await ui.find({ key: 'ns-pick-0' }))?.props.label).toBe('[ ] 1  Run the tests and show me the results')
+  expect((await ui.find({ key: 'ns-pick-0' }))?.props.label).toBe('[ ] Run the tests and show me the results')
   expect(JSON.stringify(await ui.findAll({ type: 'Text' }))).toContain('suggestions')
 })
 
@@ -189,12 +189,12 @@ test('slow model: built-in options show after 1.5s, then the tailored ones repla
 
   await clock.advance(1000) // past 1.5s: the built-in options appear
   await ui.redraw()
-  expect((await ui.find({ key: 'ns-pick-0' }))?.props.label).toBe('[ ] 1  Run the tests and show me the results')
+  expect((await ui.find({ key: 'ns-pick-0' }))?.props.label).toBe('[ ] Run the tests and show me the results')
 
   w.release() // the tailored answer arrives
   await clock.advance(10)
   await ui.redraw()
-  expect((await ui.find({ key: 'ns-pick-0' }))?.props.label).toBe('[ ] 1  Add a login test')
+  expect((await ui.find({ key: 'ns-pick-0' }))?.props.label).toBe('[ ] Add a login test')
 })
 
 test('a tailored answer never replaces a list you have started ticking', async ($, on) => {
@@ -209,7 +209,7 @@ test('a tailored answer never replaces a list you have started ticking', async (
   w.release()
   await clock.advance(10)
   await ui.redraw()
-  expect((await ui.find({ key: 'ns-pick-0' }))?.props.label).toBe('[x] 1  Run the tests and show me the results')
+  expect((await ui.find({ key: 'ns-pick-0' }))?.props.label).toBe('[x] Run the tests and show me the results')
 })
 
 test('an idle session shows starting points with no reply and no model call', async ($, on) => {
@@ -218,8 +218,8 @@ test('an idle session shows starting points with no reply and no model call', as
   const w = world(on, '["Never used"]')
   await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
   const ui = await $.ui.mount({ plugin: 'next-steps', surface: 'terminal', component: 'AbovePrompt', props: PROPS })
-  expect((await ui.find({ key: 'ns-pick-0' }))?.props.label).toBe('[ ] 1  Show me where this project stands and what is left')
-  expect((await ui.find({ key: 'ns-pick-3' }))?.props.label).toBe('[ ] 4  Pick up where we left off last time')
+  expect((await ui.find({ key: 'ns-pick-0' }))?.props.label).toBe('[ ] Show me where this project stands and what is left')
+  expect((await ui.find({ key: 'ns-pick-3' }))?.props.label).toBe('[ ] Pick up where we left off last time')
   expect(w.prompts).toEqual([])
 })
 
@@ -234,7 +234,7 @@ test('a stopped reply leaves the session idle, so the basics appear', async ($, 
   await $.turn.complete({ answer: '', durationMs: 1, isAborted: true, turnId: 't1' } as any)
   await clock.advance(10)
   await ui.redraw()
-  expect((await ui.find({ key: 'ns-pick-0' }))?.props.label).toBe('[ ] 1  Run the tests and show me the results')
+  expect((await ui.find({ key: 'ns-pick-0' }))?.props.label).toBe('[ ] Run the tests and show me the results')
   expect(w.prompts).toEqual([])
 })
 
@@ -251,4 +251,29 @@ test('/next turns it off and back on; back on shows options right away', async (
   await run()
   await ui.redraw()
   expect(await ui.find({ key: 'ns-pick-0' })).toBeDefined()
+})
+
+test('laid out like a question prompt: title, "Something else" row, Skip and × dismiss until the next idle moment', async ($, on) => {
+  mock.store(on)
+  const clock = mock.clock(on, { now: 1_000 })
+  world(on, '["Run the tests", "Commit and push"]')
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount({ plugin: 'next-steps', surface: 'terminal', component: 'AbovePrompt', props: PROPS })
+  await replyDone($, clock)
+  await ui.redraw()
+  const text = JSON.stringify(await ui.findAll({ type: 'Text' }))
+  expect(text).toContain('What would you like to do next?')
+  expect(text).toContain('Something else: just type below')
+  expect(text).toContain('tick any')
+  await ui.press({ key: 'ns-pick-0' })
+  expect(JSON.stringify(await ui.findAll({ type: 'Text' }))).toContain('1 selected')
+
+  await ui.press({ key: 'ns-skip' })
+  expect(await ui.find({ key: 'ns-pick-0' })).toBeUndefined()
+
+  await replyDone($, clock) // the next idle moment brings the options back
+  await ui.redraw()
+  expect(await ui.find({ key: 'ns-pick-0' })).toBeDefined()
+  await ui.press({ key: 'ns-close' })
+  expect(await ui.find({ key: 'ns-pick-0' })).toBeUndefined()
 })

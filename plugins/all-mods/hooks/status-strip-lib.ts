@@ -5,7 +5,18 @@ export type Tone = 'normal' | 'dim' | 'warning' | 'error' | 'success'
 
 export type RepoLike = { isRepo: boolean; branch: string; dirty: number; ahead: number; behind: number }
 export type DocsLike = { files: number; stat: string; missing: string[] }
-export type DeployLike = { ci: string; note: string; ciName: string; healthUrl: string | null; live: string | null; expected: string | null; isDone: boolean }
+export type DeployLike = {
+  ci: string
+  note: string
+  ciName: string
+  healthUrl: string | null
+  live: string | null
+  expected: string | null
+  isDone: boolean
+  kind: string
+  startedAt: number
+  endedAt: number | null
+}
 export type CacheLike = { lastApiAt: number | null; ctxPercent: number | null; ctxTokens: number | null; ctxWindow: number | null; now: number }
 export type PrefsLike = { ttlMin: number; warnMin: number }
 
@@ -19,6 +30,27 @@ export const normCwd = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '').
 export const fmtLeft = (ms: number) => {
   const m = Math.floor(ms / 60_000)
   return m >= 1 ? `${m}m` : `${Math.max(0, Math.floor(ms / 1000))}s`
+}
+
+/** How long something has been going: "<1m", "7m", "1h 05m". */
+export function fmtElapsed(ms: number): string {
+  const m = Math.floor(Math.max(0, ms) / 60_000)
+  if (m < 1) return '<1m'
+  if (m < 60) return `${m}m`
+  return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`
+}
+
+/** Wall-clock start time, local, 24-hour: "14:32". */
+export function fmtClock(ts: number): string {
+  const d = new Date(ts)
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+/** What kind of thing a shell command started, so the cell can say "merge", "push" or "deploy". */
+export function deployKind(command: string): 'merge' | 'push' | 'deploy' {
+  if (/\bgh\s+pr\s+merge\b/i.test(command)) return 'merge'
+  if (/\bgit\s+push\b/i.test(command)) return 'push'
+  return 'deploy'
 }
 
 export const fmtK = (n: number | null) => (n === null ? '?' : n >= 1000 ? `${Math.round(n / 1000)}k` : String(n))
@@ -52,16 +84,17 @@ export function docsView(d: DocsLike | null): CellView {
     : { text: 'current', tone: 'normal', needs: false }
 }
 
-export function deployView(d: DeployLike | null): CellView | null {
+export function deployView(d: DeployLike | null, now: number): CellView | null {
   if (d === null) return null
-  if (d.ci === 'failed') return { text: 'CI failed', tone: 'error', needs: true }
+  const took = fmtElapsed((d.endedAt ?? now) - d.startedAt)
+  if (d.ci === 'failed') return { text: `CI failed · after ${took}`, tone: 'error', needs: true }
   if (d.ci === 'passed') {
-    if (d.healthUrl === null) return { text: 'CI passed', tone: 'success', needs: false }
-    if (d.live !== null && d.live === d.expected) return { text: `✔ v${d.live} live`, tone: 'success', needs: false }
-    return { text: d.live === null ? 'checking…' : `live: ${d.live}`, tone: 'warning', needs: d.isDone }
+    if (d.healthUrl === null) return { text: `CI passed · ${took}`, tone: 'success', needs: false }
+    if (d.live !== null && d.live === d.expected) return { text: `✔ v${d.live} live · ${took}`, tone: 'success', needs: false }
+    return { text: d.live === null ? `checking… · ${took}` : `live: ${d.live} · ${took}`, tone: 'warning', needs: d.isDone }
   }
-  if (d.ci === 'unknown') return { text: 'CI unknown', tone: 'dim', needs: false }
-  return { text: d.ci === 'waiting' ? 'CI queued' : 'CI running', tone: 'normal', needs: false }
+  if (d.ci === 'unknown') return { text: `CI unknown · ${took}`, tone: 'dim', needs: false }
+  return { text: `${d.ci === 'waiting' ? 'CI queued' : 'CI running'} · ${took}`, tone: 'normal', needs: false }
 }
 
 export function ctxView(c: CacheLike): CellView {

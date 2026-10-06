@@ -12,7 +12,7 @@
       "id": "status-strip",
       "name": "status-strip",
       "summary": "One quiet strip: repo, docs, deploy, context and cache, each with a button",
-      "where": "A strip above the prompt. Each item is a dim label with its value underneath and one button, dim until something needs doing. Cache sits on the far right with a settings dropdown. Also adds /where.",
+      "where": "A strip above the prompt. Each item is a dim label with its value underneath and one button, dim until something needs doing. Cache sits on the far right with a settings dropdown. Also adds /where. During a push, merge or deploy it shows how long it has been going, then how long it took.",
       "preview": [
         {
           "text": "repo            docs            context                                    cache"
@@ -31,6 +31,10 @@
         {
           "text": "⚙ ▾ opens dropdowns: cache lifetime, keep alive, idle stop, warn level, show always or only when needed",
           "dim": true
+        },
+        {
+          "text": "push  CI running · 7m        (push started 14:32 · still going)  →  ✔ v3.22 live · 9m",
+          "dim": true
         }
       ],
       "cost": "Checking is free. Refresh and the optional Auto keep-alive read your cached context (about 10% of normal input price). Compress is one summarizing call. Auto is off by default.",
@@ -43,24 +47,38 @@
       "where": "A bordered panel above the prompt whenever nothing is running: at the start of a session, after each reply, and after a stopped reply. Tick one or more options, preview what will be sent, then Send. Each row also has a one-click send. You can still type anything.",
       "preview": [
         {
-          "text": "What next?  tick one or more, then send                           New ideas  Off"
+          "text": "╭────────────────────────────────────────────────────────────╮"
         },
         {
-          "text": "[x] 1  Run the tests and show me the results   send"
+          "text": "│ What would you like to do next?              2 selected  × │"
         },
         {
-          "text": "[ ] 2  Review what changed and point out any problems   send",
+          "text": "│ ────────────────────────────────────────────────────────── │",
           "dim": true
         },
         {
-          "text": "[x] 3  Commit and push the changes   send"
+          "text": "│ 1  [x] Run the tests and show me the results          send │"
         },
         {
-          "text": "[ Send selected (2) ]  [ Edit selected ]  Clear"
-        },
-        {
-          "text": "Send selected previews first: \"Please do these in order: 1. … 2. …\"   [ Send ] [ Back ]",
+          "text": "│ 2  [ ] Review what changed and point out any problems send │",
           "dim": true
+        },
+        {
+          "text": "│ 3  [x] Commit and push the changes                    send │"
+        },
+        {
+          "text": "│ ────────────────────────────────────────────────────────── │",
+          "dim": true
+        },
+        {
+          "text": "│ ✎  Something else: just type below                  [ Skip ] │",
+          "dim": true
+        },
+        {
+          "text": "│ [ Send selected (2) ] [ Edit selected ]    New ideas  Off  │"
+        },
+        {
+          "text": "╰────────────────────────────────────────────────────────────╯"
         }
       ],
       "cost": "One small request per reply to a small, fast model, using only your latest request and Claude's latest reply (a couple of thousand input tokens). Turn it off with Off or /next.",

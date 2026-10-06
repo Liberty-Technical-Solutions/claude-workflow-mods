@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { CacheState, Deploy, Docs, Prefs, Repo, StripUi } from '../types'
-import { CONFIRM_MS, cacheView, ctxView, deployView, docsMissing, docsView, fmtK, normCwd, parseStatus, repoView } from './lib'
+import { CONFIRM_MS, cacheView, ctxView, deployKind, deployView, docsMissing, docsView, fmtClock, fmtK, normCwd, parseStatus, repoView } from './lib'
 
 // One strip above the prompt: repo, docs, deploy, context ... cache. Each cell is a dim label with its value
 // underneath and one button. Buttons are dim when nothing needs doing and bright when something does.
@@ -185,6 +185,7 @@ async function ssDeployPoll($: EngineInterface) {
   const ciFinal = next.ci === 'passed' || next.ci === 'failed' || next.ci === 'unknown'
   const versionOk = !cfg.healthUrl || (next.expected != null && next.live === next.expected)
   next.isDone = (ciFinal && versionOk) || now - current.startedAt > ssPollGiveUpMs
+  if (next.isDone) next.endedAt = now
   await update($, ssDeploy, d => (d ? { ...d, ...next } : d))
 }
 
@@ -403,7 +404,7 @@ async function ssToolCallBash($: any, e: any, next: any) {
   if (ran.deny === undefined && ran.isError !== true && ssDeployTrigger.test(e.command)) {
     const startedAt = await $.clock.now()
     await update($, ssDeploy, () => ({
-      ci: 'waiting', note: '', ciName: '', healthUrl: null, live: null, expected: null, startedAt, isDone: false,
+      ci: 'waiting', note: '', ciName: '', healthUrl: null, live: null, expected: null, kind: deployKind(e.command), startedAt, endedAt: null, isDone: false,
     }))
     void ssDeployPoll($).catch(() => {})
   }
@@ -421,8 +422,8 @@ async function ssRenderStrip($: any, e: any, next: any) {
 
   const repo = repoView(await read($, ssRepo))
   const docs = docsView(await read($, ssDocs))
-  const deploy = deployView(await read($, ssDeploy))
   const c = await read($, ssCache)
+  const deploy = deployView(await read($, ssDeploy), c.now)
   const prefs = await read($, ssPrefs)
   const ui = await read($, ssUi)
   const ctx = ctxView(c)
@@ -468,7 +469,7 @@ async function ssRenderStrip($: any, e: any, next: any) {
       <Box columnGap={2} flexWrap="wrap">
         {cell('repo', 'repo', repo, null)}
         {cell('docs', 'docs', docs, btn('ss-docs', 'Fix', docs.needs, () => void ssFixDocs($)))}
-        {deploy && cell('deploy', 'deploy', deploy, btn('ss-deploy', 'Dismiss', deploy.needs, () => void update($, ssDeploy, () => null)))}
+        {deploy && cell('deploy', rawDeploy?.kind ?? 'deploy', deploy, btn('ss-deploy', 'Dismiss', deploy.needs, () => void update($, ssDeploy, () => null)))}
         {cell('ctx', 'context', ctx, btn('ss-compress', isArmed ? 'Compress…' : 'Compress', ctx.needs || isArmed, () => void ssAskCompress($)))}
         <Box flexGrow={1} />
         {cell(
@@ -548,7 +549,14 @@ async function ssRenderStrip($: any, e: any, next: any) {
         </Box>
       )}
 
-      {rawDeploy && rawDeploy.note && <Text dimColor>deploy: {rawDeploy.note}</Text>}
+      {rawDeploy && (
+        <Text dimColor>
+          {rawDeploy.kind} started {fmtClock(rawDeploy.startedAt)}
+          {rawDeploy.endedAt !== null ? `, finished ${fmtClock(rawDeploy.endedAt)}` : ' (still going)'}
+          {rawDeploy.ciName ? ` · ${rawDeploy.ciName}` : ''}
+          {rawDeploy.note ? ` · ${rawDeploy.note}` : ''}
+        </Text>
+      )}
       {rawDocs && rawDocs.missing.length > 0 && <Text dimColor>docs: {rawDocs.missing.join(' · ')}</Text>}
       {ui.msg && <Text dimColor>{ui.msg}</Text>}
       {rest}

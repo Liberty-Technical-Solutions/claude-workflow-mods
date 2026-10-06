@@ -9,7 +9,11 @@ export type Deploy = {
   healthUrl: string | null
   live: string | null
   expected: string | null
+  /** 'merge', 'push' or 'deploy': what started the watch, shown as the cell's label. */
+  kind: string
   startedAt: number
+  /** When the run finished (for "took 3m"); null while it is still going. */
+  endedAt: number | null
   isDone: boolean
 }
 

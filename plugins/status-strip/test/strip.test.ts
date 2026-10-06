@@ -4,12 +4,14 @@ import { expect, mock, test } from 'claude-code/testing'
 
 const PROPS = { hasSurvey: false, bodyColumns: 100 } as any
 
-function world(on: any, opts: { ctx?: number } = {}) {
+function world(on: any, opts: { ctx?: number; runList?: () => string } = {}) {
   const compacted: number[] = []
   const submitted: string[] = []
   on('process.run', ($: any, e: any) => {
     const cmd = e.argv.join(' ')
-    const out = cmd.includes('status --porcelain=v1 -b') ? '## main...origin/main [ahead 2]\n M a.ts\n M b.ts' : cmd.includes('rev-parse HEAD') ? 'abc123' : ''
+    const out = cmd.includes('run list')
+      ? (opts.runList?.() ?? '')
+      : cmd.includes('status --porcelain=v1 -b') ? '## main...origin/main [ahead 2]\n M a.ts\n M b.ts' : cmd.includes('rev-parse HEAD') ? 'abc123' : ''
     return { value: { exitCode: 0, stdout: out, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
   })
   on('session.usage', () => ({ value: { startedAt: 0, rateLimits: [], context: { percent: opts.ctx ?? 78, tokens: 156000, window: 200000 } } }))
@@ -86,4 +88,26 @@ test('cells show repo and context values', async ($, on) => {
   const text = JSON.stringify(await ui.findAll({ type: 'Text' }))
   expect(text).toContain('main ±2 ↑2')
   expect(text).toContain('38%')
+})
+
+test('a push shows how long the deploy has been going, then how long it took', async ($, on) => {
+  mock.store(on)
+  const clock = mock.clock(on, { now: 1_000 })
+  let status = 'in_progress'
+  world(on, { runList: () => JSON.stringify([{ databaseId: 1, status, conclusion: status === 'completed' ? 'success' : '', name: 'Deploy' }]) })
+  on('tool.call', () => ({ result: 'ok', text: 'ok', isError: false }))
+  const ui = await start($)
+  await $.tool.call({ tool: 'Bash', tool_use_id: 't1', command: 'git push origin main' } as any)
+  await clock.advance(5 * 60_000)
+  await ui.redraw()
+
+  const running = JSON.stringify(await ui.findAll({ type: 'Text' }))
+  expect(running).toContain('push') // the cell is labelled by what started it
+  expect(running).toMatch(/CI running · [45]m/)
+  expect(running).toContain('started') // wall-clock start time on the detail line
+
+  status = 'completed'
+  await clock.advance(60_000)
+  await ui.redraw()
+  expect(JSON.stringify(await ui.findAll({ type: 'Text' }))).toMatch(/CI passed · [5-7]m/)
 })

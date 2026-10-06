@@ -149,6 +149,11 @@ async function nsPromptSubmit($: any, e: any, next: any) {
   return next(e)
 }
 
+// Dismisses the panel until the next idle moment, without turning the feature off.
+async function nsSkip($: EngineInterface) {
+  await nsClear($)
+}
+
 async function nsRenderBand($: any, e: any, next: any) {
   const s = await read($, nsSteps)
   const prefs = await read($, nsPrefs)
@@ -158,28 +163,23 @@ async function nsRenderBand($: any, e: any, next: any) {
   const rest = await next(e)
   const n = s.picked.length
   const previewLines = combineSelected(s.picked.map((i: number) => s.items[i]).filter(Boolean)).split('\n')
+  const rule = <Text dimColor>{'─'.repeat(Math.max(20, (e.props.bodyColumns ?? 80) - 6))}</Text>
 
+  // Laid out like Claude's own question prompt: a question, numbered options each followed by a thin rule,
+  // a "Something else" row and a Skip button. The difference: every option is a checkbox.
   return (
     <Box flexDirection="column">
       <Box key="ns-panel" flexDirection="column" marginTop={1} borderStyle="round" borderDimColor paddingX={1}>
         <Box gap={2}>
-          <Text bold>What next?</Text>
-          {s.items.length > 0 && <Text dimColor>{s.isFallback ? 'suggestions · ' : ''}tick one or more, then send</Text>}
+          <Text bold>What would you like to do next?</Text>
           <Box flexGrow={1} />
-          <Button key="ns-refresh" label="New ideas" plain dimColor onPress={() => void nsGenerate($, s.gen).catch(() => {})} />
-          <Button key="ns-off" label="Off" plain dimColor onPress={() => void (async () => { await nsSetPrefs($, { isOn: false }); await nsClear($) })()} />
+          <Text dimColor>{n > 0 ? `${n} selected` : s.isFallback ? 'suggestions' : 'tick any'}</Text>
+          <Button key="ns-close" label="×" plain dimColor onPress={() => void nsSkip($)} />
         </Box>
-        {s.items.map((text: string, i: number) => {
-          const isPicked = s.picked.includes(i)
-          return (
-            <Box key={`ns-row-${i}`} gap={1}>
-              <Button key={`ns-pick-${i}`} label={`${isPicked ? '[x]' : '[ ]'} ${i + 1}  ${text}`} hotkey={String(i + 1)} variant={isPicked ? 'primary' : undefined} onPress={() => void nsToggle($, i)} />
-              <Button key={`ns-go-${i}`} label="send" plain dimColor onPress={() => void nsSend($, text)} />
-            </Box>
-          )
-        })}
-        {s.items.length > 0 && s.isPreviewing && (
-          <Box key="ns-preview" flexDirection="column" borderStyle="round" paddingX={1}>
+
+        {s.isPreviewing ? (
+          <Box key="ns-preview" flexDirection="column">
+            {rule}
             <Text bold>This will be sent as one request:</Text>
             {previewLines.map((line: string, i: number) => (
               <Text key={`ns-pv-${i}`}>{line}</Text>
@@ -189,12 +189,35 @@ async function nsRenderBand($: any, e: any, next: any) {
               <Button key="ns-back" label="Back" onPress={() => void update($, nsSteps, st => ({ ...st, isPreviewing: false }))} />
             </Box>
           </Box>
-        )}
-        {s.items.length > 0 && !s.isPreviewing && (
-          <Box gap={1}>
-            <Button key="ns-send" label={n > 0 ? `Send selected (${n})` : 'Send selected'} hotkey="s" variant={n > 0 ? 'primary' : undefined} dimColor={n === 0} onPress={() => void nsPreview($)} />
-            <Button key="ns-edit" label="Edit selected" dimColor={n === 0} onPress={() => void nsEditSelected($)} />
-            <Button key="ns-clear" label="Clear" plain dimColor onPress={() => void update($, nsSteps, st => ({ ...st, picked: [] }))} />
+        ) : (
+          <Box flexDirection="column">
+            {s.items.map((text: string, i: number) => {
+              const isPicked = s.picked.includes(i)
+              return (
+                <Box key={`ns-row-${i}`} flexDirection="column">
+                  {rule}
+                  <Box gap={1}>
+                    <Text dimColor>{String(i + 1)}</Text>
+                    <Button key={`ns-pick-${i}`} label={`${isPicked ? '[x]' : '[ ]'} ${text}`} hotkey={String(i + 1)} variant={isPicked ? 'primary' : undefined} onPress={() => void nsToggle($, i)} />
+                    <Box flexGrow={1} />
+                    <Button key={`ns-go-${i}`} label="send" plain dimColor onPress={() => void nsSend($, text)} />
+                  </Box>
+                </Box>
+              )
+            })}
+            {rule}
+            <Box gap={1}>
+              <Text dimColor>✎  Something else: just type below</Text>
+              <Box flexGrow={1} />
+              <Button key="ns-skip" label="Skip" onPress={() => void nsSkip($)} />
+            </Box>
+            <Box gap={1}>
+              <Button key="ns-send" label={n > 0 ? `Send selected (${n})` : 'Send selected'} hotkey="s" variant={n > 0 ? 'primary' : undefined} dimColor={n === 0} onPress={() => void nsPreview($)} />
+              <Button key="ns-edit" label="Edit selected" dimColor={n === 0} onPress={() => void nsEditSelected($)} />
+              <Box flexGrow={1} />
+              <Button key="ns-refresh" label="New ideas" plain dimColor onPress={() => void nsGenerate($, s.gen).catch(() => {})} />
+              <Button key="ns-off" label="Off" plain dimColor onPress={() => void (async () => { await nsSetPrefs($, { isOn: false }); await nsClear($) })()} />
+            </Box>
           </Box>
         )}
       </Box>

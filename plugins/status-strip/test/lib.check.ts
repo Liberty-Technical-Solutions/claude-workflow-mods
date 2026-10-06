@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { cacheView, ctxView, deployView, docsMissing, docsView, fmtK, fmtLeft, parseStatus, repoView } from '../hooks/lib.ts'
+import { cacheView, ctxView, deployKind, deployView, docsMissing, docsView, fmtClock, fmtElapsed, fmtK, fmtLeft, parseStatus, repoView } from '../hooks/lib.ts'
 
 test('parseStatus: branch, dirty, ahead, behind', () => {
   assert.deepEqual(parseStatus('## main...origin/main [ahead 2, behind 1]\n M a.ts\n?? b.ts\n M c.ts'), { isRepo: true, branch: 'main', dirty: 3, ahead: 2, behind: 1 })
@@ -43,14 +43,33 @@ test('cacheView: cold, healthy, warning, expired', () => {
   assert.equal(cacheView(mk(3), { ttlMin: 5, warnMin: 5 }).needs, true)
 })
 
-test('deployView', () => {
-  const d = { ci: 'running', note: '', ciName: '', healthUrl: null, live: null, expected: null, isDone: false }
-  assert.equal(deployView(null), null)
-  assert.equal(deployView(d)?.text, 'CI running')
-  assert.equal(deployView({ ...d, ci: 'failed' })?.tone, 'error')
-  assert.equal(deployView({ ...d, ci: 'passed' })?.text, 'CI passed')
-  assert.equal(deployView({ ...d, ci: 'passed', healthUrl: 'u', live: '3.22', expected: '3.22' })?.text, '✔ v3.22 live')
-  assert.equal(deployView({ ...d, ci: 'passed', healthUrl: 'u', live: '3.21', expected: '3.22', isDone: true })?.needs, true)
+test('deployView: shows how long it has been going, and how long it took', () => {
+  const MIN = 60_000
+  const d = { ci: 'running', note: '', ciName: '', healthUrl: null, live: null, expected: null, isDone: false, kind: 'deploy', startedAt: 1_000_000, endedAt: null }
+  const at = (m: number) => 1_000_000 + m * MIN
+  assert.equal(deployView(null, at(0)), null)
+  assert.equal(deployView(d, at(0))?.text, 'CI running · <1m')
+  assert.equal(deployView(d, at(7))?.text, 'CI running · 7m')
+  assert.equal(deployView({ ...d, ci: 'waiting' }, at(2))?.text, 'CI queued · 2m')
+  assert.equal(deployView({ ...d, ci: 'failed', endedAt: at(3) }, at(30))?.text, 'CI failed · after 3m')
+  assert.equal(deployView({ ...d, ci: 'failed', endedAt: at(3) }, at(30))?.tone, 'error')
+  assert.equal(deployView({ ...d, ci: 'passed', endedAt: at(4) }, at(30))?.text, 'CI passed · 4m')
+  assert.equal(deployView({ ...d, ci: 'passed', healthUrl: 'u', live: '3.22', expected: '3.22', endedAt: at(5) }, at(30))?.text, '✔ v3.22 live · 5m')
+  assert.equal(deployView({ ...d, ci: 'passed', healthUrl: 'u', live: '3.21', expected: '3.22', isDone: true, endedAt: at(5) }, at(30))?.needs, true)
+})
+
+test('fmtElapsed, fmtClock and deployKind', () => {
+  assert.equal(fmtElapsed(0), '<1m')
+  assert.equal(fmtElapsed(59_000), '<1m')
+  assert.equal(fmtElapsed(61_000), '1m')
+  assert.equal(fmtElapsed(59 * 60_000), '59m')
+  assert.equal(fmtElapsed(65 * 60_000), '1h 05m')
+  assert.equal(fmtElapsed(-5), '<1m')
+  assert.match(fmtClock(Date.now()), /^\d\d:\d\d$/)
+  assert.equal(fmtClock(new Date(2026, 9, 6, 9, 5).getTime()), '09:05')
+  assert.equal(deployKind('gh pr merge 42 --squash'), 'merge')
+  assert.equal(deployKind('git push origin main'), 'push')
+  assert.equal(deployKind('npm run deploy'), 'deploy')
 })
 
 test('docsMissing', () => {
