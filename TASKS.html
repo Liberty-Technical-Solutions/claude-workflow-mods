@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tasks</title>
+<style>
+:root{--bg:#fff;--fg:#1b1f24;--mut:#6a737d;--line:#e4e7eb;--ok:#2da44e;--card:#f6f8fa}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1317;--fg:#e6e9ee;--mut:#8b949e;--line:#262c33;--ok:#3fb950;--card:#161b21}}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,sans-serif}
+main{max-width:720px;margin:0 auto;padding:32px 16px}
+h1{font-size:1.4rem;margin:0 0 4px}.sub{color:var(--mut);margin:0 0 24px;font-size:.9rem}
+h2{font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);margin:28px 0 8px}
+ul{list-style:none;margin:0;padding:0;background:var(--card);border:1px solid var(--line);border-radius:8px}
+li{padding:10px 14px;border-top:1px solid var(--line)}li:first-child{border-top:0}
+label{display:flex;gap:10px;align-items:flex-start;cursor:default}
+input{margin-top:5px;accent-color:var(--ok)}
+input:checked+span{color:var(--mut);text-decoration:line-through}
+</style></head><body><main>
+<h1>claude-workflow-mods tasks</h1>
+<p class="sub">Checklist kept by Claude: ticked when done, new finds added. Updated 2026-10-08.</p>
+<h2>Open</h2><ul>
+<li><label><input type="checkbox" disabled><span>Review and merge PR #1</span></label></li>
+<li><label><input type="checkbox" disabled><span>Consider moving pinned Haiku model ID (next-steps) to a constant or the current Haiku</span></label></li>
+<li><label><input type="checkbox" disabled><span>Reword usage-guard deny text ("wait for their go-ahead or the reset")</span></label></li>
+</ul><h2>Done</h2><ul>
+<li><label><input type="checkbox" checked disabled><span>Prompt audit of mod prompt surface (PR #1 opened)</span></label></li>
+</ul></main></body></html>
