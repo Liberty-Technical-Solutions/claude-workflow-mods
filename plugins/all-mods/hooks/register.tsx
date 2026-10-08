@@ -776,7 +776,7 @@ const nsPrefsInit: NextPrefs = { isOn: true, count: 4 }
 const nsSteps = atom({ plugin: 'all-mods', key: 'next-steps.steps' } as const, nsStepsInit)
 const nsPrefs = atom({ plugin: 'all-mods', key: 'next-steps.prefs' } as const, nsPrefsInit)
 
-const nsModel = 'claude-haiku-4-5-20251001' // small and fast; the reply only needs the latest exchange
+const nsModel = 'claude-haiku-5-5' // small and fast; the reply only needs the latest exchange
 const nsStarterMs = 1500 // show the built-in suggestions if the tailored ones are not ready by then
 
 async function nsSetPrefs($: EngineInterface, p: Partial<NextPrefs>) {
@@ -1080,7 +1080,7 @@ async function ugAgentSpawn($: any, e: any, next: any) {
   if (top !== null && top.percentUsed >= ugBlockAt) {
     const reset = top.resetsAt ? ` (resets ${top.resetsAt})` : ''
     return {
-      deny: `usage-guard: ${ugLabel(top.kind)} usage is at ${Math.round(top.percentUsed)}%${reset}. Not starting "${e.description}" because it would likely die mid-task. Tell the user and wait for their go-ahead or the reset.`,
+      deny: `usage-guard: ${ugLabel(top.kind)} usage is at ${Math.round(top.percentUsed)}%${reset}. Not starting "${e.description}" because it would likely die mid-task. Tell the user; the block lifts after the reset.`,
     }
   }
 

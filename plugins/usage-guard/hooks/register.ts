@@ -35,7 +35,7 @@ async function ugAgentSpawn($: any, e: any, next: any) {
   if (top !== null && top.percentUsed >= ugBlockAt) {
     const reset = top.resetsAt ? ` (resets ${top.resetsAt})` : ''
     return {
-      deny: `usage-guard: ${ugLabel(top.kind)} usage is at ${Math.round(top.percentUsed)}%${reset}. Not starting "${e.description}" because it would likely die mid-task. Tell the user and wait for their go-ahead or the reset.`,
+      deny: `usage-guard: ${ugLabel(top.kind)} usage is at ${Math.round(top.percentUsed)}%${reset}. Not starting "${e.description}" because it would likely die mid-task. Tell the user; the block lifts after the reset.`,
     }
   }
 

@@ -1,1 +1,1 @@
-{ "name": "next-steps", "description": "After each turn, shows a few clickable options for what to do next so you can click instead of typing. Click to send, or Edit to tweak first.", "types": "./types/index.d.ts" }
+{ "name": "next-steps", "description": "Whenever nothing is running (session start, after a reply, after a stopped reply), shows a checkbox panel of next-step options above the prompt. Tick one or more and Send selected or Edit selected, or send one with a click.", "types": "./types/index.d.ts" }

@@ -19,7 +19,7 @@ const nsPrefsInit: NextPrefs = { isOn: true, count: 4 }
 const nsSteps = atom({ plugin: 'next-steps', key: 'steps' } as const, nsStepsInit)
 const nsPrefs = atom({ plugin: 'next-steps', key: 'prefs' } as const, nsPrefsInit)
 
-const nsModel = 'claude-haiku-4-5-20251001' // small and fast; the reply only needs the latest exchange
+const nsModel = 'claude-haiku-5-5' // small and fast; the reply only needs the latest exchange
 const nsStarterMs = 1500 // show the built-in suggestions if the tailored ones are not ready by then
 
 async function nsSetPrefs($: EngineInterface, p: Partial<NextPrefs>) {
