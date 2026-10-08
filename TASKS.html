@@ -7,7 +7,8 @@
 body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,sans-serif}
 main{max-width:720px;margin:0 auto;padding:32px 16px}
 h1{font-size:1.4rem;margin:0 0 4px}.sub{color:var(--mut);margin:0 0 24px;font-size:.9rem}
-h2{font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);margin:28px 0 8px}
+h2{font-size:1rem;margin:24px 0 8px}h2 small{color:var(--mut);font-weight:400;margin-left:6px}
+section.done h2{color:var(--mut)}
 ul{list-style:none;margin:0;padding:0;background:var(--card);border:1px solid var(--line);border-radius:8px}
 li{padding:10px 14px;border-top:1px solid var(--line)}li:first-child{border-top:0}
 label{display:flex;gap:10px;align-items:flex-start;cursor:default}
@@ -15,11 +16,23 @@ input{margin-top:5px;accent-color:var(--ok)}
 input:checked+span{color:var(--mut);text-decoration:line-through}
 </style></head><body><main>
 <h1>claude-workflow-mods tasks</h1>
-<p class="sub">Checklist kept by Claude: ticked when done, new finds added. Updated 2026-10-08.</p>
-<h2>Open</h2><ul>
-<li><label><input type="checkbox" disabled><span>Review and merge PR #1</span></label></li>
-</ul><h2>Done</h2><ul>
-<li><label><input type="checkbox" checked disabled><span>Reword usage-guard deny text ("wait for their go-ahead or the reset")</span></label></li>
-<li><label><input type="checkbox" checked disabled><span>Consider moving pinned Haiku model ID (next-steps) to a constant or the current Haiku</span></label></li>
-<li><label><input type="checkbox" checked disabled><span>Prompt audit of mod prompt surface (PR #1 opened)</span></label></li>
-</ul></main></body></html>
+<p class="sub">5 of 8 done · phases are 15 minutes or less · kept by Claude, updated 2026-10-08.</p>
+<section class="done"><h2>Phase 1: Audit prompt surface <small>~10 min · done</small></h2><ul>
+<li><label><input type="checkbox" checked disabled><span>Audit hook strings, README, plugin.json, catalog; find one stale description</span></label></li>
+</ul></section>
+<section class="done"><h2>Phase 2: Apply fixes <small>~10 min · done</small></h2><ul>
+<li><label><input type="checkbox" checked disabled><span>Rewrite next-steps description to match the checkbox panel</span></label></li>
+<li><label><input type="checkbox" checked disabled><span>Fix usage-guard deny wording (plugin and all-mods copy)</span></label></li>
+<li><label><input type="checkbox" checked disabled><span>Bump next-steps model to claude-haiku-5-5</span></label></li>
+</ul></section>
+<section class="done"><h2>Phase 3: Land the PR <small>~5 min · done</small></h2><ul>
+<li><label><input type="checkbox" checked disabled><span>Open and merge PR #1</span></label></li>
+</ul></section>
+<section class=""><h2>Phase 4: Verify the model bump <small>~10 min</small></h2><ul>
+<li><label><input type="checkbox" disabled><span>Confirm the mod runtime accepts claude-haiku-5-5 (no test runner available in this CLI); revert that line if rejected</span></label></li>
+</ul></section>
+<section class=""><h2>Phase 5: Branch cleanup <small>~5 min</small></h2><ul>
+<li><label><input type="checkbox" disabled><span>Delete remote branch prompt-audit-updates</span></label></li>
+<li><label><input type="checkbox" disabled><span>Merge the TASKS.html phases PR</span></label></li>
+</ul></section>
+</main></body></html>
